@@ -160,7 +160,7 @@ def main():
             )
             time.sleep(0.1)
             pydirectinput.mouseDown(button="left")
-            time.sleep(1.2)
+            time.sleep(np.random.uniform(0.5, 1))
             pydirectinput.mouseUp(button="left")
             time.sleep(2)
 
@@ -178,21 +178,21 @@ def main():
                 pydirectinput.moveTo(x + button_template.size[0] // 6, y + 10)
                 time.sleep(0.08)
                 pydirectinput.click()
-                time.sleep(0.35)
+                time.sleep(0.4)
             else:
                 # print("No button")
                 break
 
         if was_shaking:
             # Wait for reeling minigame to start
-            time.sleep(2.25)
+            time.sleep(1.5)
 
         was_reeling = False
         last_reel_check_time = 0
         last_position = 0
-        last_velocity = 0
+        last_velocity = -0.5
         velocity = 0
-        acceleration = 0
+        acceleration = -0.5
 
         last_time = time.time() - 0.1
 
@@ -229,21 +229,28 @@ def main():
             projected_velocity = velocity + acceleration * projected_time
 
             # If the projected position appears to hit the edge, then we reflect the velocity to simulate bouncing
-            if projected_position < 0:
-                projected_position *= -1
-                projected_velocity *= -1
-            elif projected_position > 1 - width:
-                projected_position = ((1 - width) * 2) - projected_position
-                projected_velocity *= -1
 
             projected_error = target - projected_position
 
-            if projected_error > 0 or projected_velocity < -3:
+            max_target_speed = 0.8
+
+            if (
+                # If the fish is almost completely on the left
+                not target < width / 2
+                # and not (will_crash and projected_velocity > 0.33)
+                and (
+                    (
+                        (projected_error > 0 or projected_velocity < -max_target_speed)
+                        and not projected_velocity > max_target_speed
+                    )
+                    or (target > 1 - width and projected_position < 1 - (width / 2))
+                )
+            ):
                 pydirectinput.mouseDown(button="left")
             else:
                 pydirectinput.mouseUp(button="left")
 
-            time.sleep(1 / 30)
+            time.sleep(1 / 20)
 
         if was_reeling:
             pydirectinput.mouseUp(button="left")
