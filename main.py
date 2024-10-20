@@ -45,26 +45,32 @@ def paste(
 button_background = Image.open("base_button.png")
 button_text = Image.open("base_text.png")
 button_template = paste(button_background, button_text, background_alpha=0.6)
-button = cv2.resize(np.array(button_template), (121, 121))
-button = cv2.cvtColor(button, cv2.COLOR_BGR2GRAY)
+button_template = cv2.cvtColor(np.array(button_template), cv2.COLOR_BGR2GRAY)
+button_scales = [121, 205]
 
 reel_prompt = np.array(Image.open("reel_prompt.png"))
 reel_prompt = cv2.cvtColor(reel_prompt, cv2.COLOR_RGBA2GRAY)
 
 
-def get_shake_button_pos():
-    with mss.mss() as capture:
-        image = np.array(capture.grab(capture.monitors[MONITOR_INDEX]))
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    matched = cv2.matchTemplate(image, button, cv2.TM_CCOEFF_NORMED, None, None)
-    _, max_value, _, max_location = cv2.minMaxLoc(matched)
-    a = max_location
-    b = (a[0] + button.shape[0], a[1] + button.shape[1])
+def get_shake_button_pos(threshold=0.25):
+    for scale in button_scales:
+        button = cv2.resize(button_template, (scale, scale))
 
-    x = (a[0] + b[0]) // 2
-    y = (a[1] + b[1]) // 2
+        with mss.mss() as capture:
+            image = np.array(capture.grab(capture.monitors[MONITOR_INDEX]))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        matched = cv2.matchTemplate(image, button, cv2.TM_CCOEFF_NORMED, None, None)
+        _, max_value, _, max_location = cv2.minMaxLoc(matched)
+        a = max_location
+        b = (a[0] + button.shape[0], a[1] + button.shape[1])
 
-    return (x, y), max_value
+        x = (a[0] + b[0]) // 2
+        y = (a[1] + b[1]) // 2
+
+        if max_value > threshold:
+            return (x, y)
+
+    return (-1, 1)
 
 
 def is_reeling():
@@ -158,9 +164,9 @@ def main():
             pydirectinput.moveTo(
                 reel_rect[0] + reel_rect[2] // 2, reel_rect[1] + reel_rect[3]
             )
-            time.sleep(0.1)
+            time.sleep(0.02)
             pydirectinput.mouseDown(button="left")
-            time.sleep(np.random.uniform(0.5, 1))
+            time.sleep(np.random.uniform(0.25, 0.35))
             pydirectinput.mouseUp(button="left")
             time.sleep(2)
 
@@ -168,19 +174,18 @@ def main():
         was_shaking = False
 
         while auto_shake:
-            (x, y), max_value = get_shake_button_pos()
+            (x, y) = get_shake_button_pos(threshold=0.25)
 
-            if max_value > 0.25:
+            if x >= 0 and y >= 0:
                 was_shaking = True
 
-                # print(f"Found shake button at ({x}, {y})")
-                pydirectinput.moveTo(x + button_template.size[0] // 6, y)
-                pydirectinput.moveTo(x + button_template.size[0] // 6, y + 10)
+                pydirectinput.moveTo(x + button_template.shape[1] // 6, y + 10)
+                time.sleep(0.02)
+                pydirectinput.moveTo(x + button_template.shape[1] // 6, y)
                 time.sleep(0.08)
                 pydirectinput.click()
-                time.sleep(0.4)
+                time.sleep(np.random.uniform(0.4, 0.6))
             else:
-                # print("No button")
                 break
 
         if was_shaking:
