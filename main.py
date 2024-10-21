@@ -147,6 +147,36 @@ def toggle_auto_reel():
     auto_reel = not auto_reel
 
 
+class KinematicEstimator:
+    """
+    Second order estimator
+    """
+
+    def __init__(self, x=0, v=0, a=0):
+        self.state = (x, v, a)
+        self.prev_state = (x, v, a)
+
+    def update(self, x: float, delta_time: float):
+        (prev_x, prev_v, _) = self.prev_state
+
+        v = (x - prev_x) / delta_time
+        a = (v - prev_v) / delta_time
+
+        self.prev_state = self.state
+        self.state = (x, v, a)
+
+    def estimate(self, projected_time: float, ignore_acceleration=False):
+        (x, v, a) = self.state
+
+        v_p = v + (a * projected_time)
+        x_p = x + (v * projected_time)
+
+        if not ignore_acceleration:
+            x_p += 0.5 * a * projected_time**2
+
+        return (x_p, v_p)
+
+
 def main():
     pydirectinput.PAUSE = 0
 
@@ -194,14 +224,15 @@ def main():
 
         was_reeling = False
         last_reel_check_time = 0
-        last_position = 0
-        last_velocity = -0.5
-        velocity = 0
-        acceleration = -0.5
 
         last_time = time.time() - 0.1
+        reel_estimator = KinematicEstimator()
+        target_estimator = KinematicEstimator()
+
+        is_holding = False
 
         while auto_reel:
+            # Check reeling conditions
             if (
                 time.time() - last_reel_check_time > 0.5
                 or get_window_title() != "Roblox"
@@ -215,51 +246,76 @@ def main():
             delta_time = time.time() - last_time
             last_time = time.time()
 
-            position, width, target = get_reel_state()
+            # Get current state
+
+            x, width, target = get_reel_state()
+
+            left_edge = width / 2
+            right_edge = 1 - (width / 2)
 
             # Update kinematic metrics
 
-            velocity = (position - last_position) / delta_time
-            acceleration = (velocity - last_velocity) / delta_time
-
-            last_position = position
-            last_velocity = velocity
+            reel_estimator.update(x, delta_time)
+            target_estimator.update(target, delta_time)
 
             projected_time = 0.2
-            projected_position = (
-                position
-                + (velocity * projected_time)
-                + (0.5 * acceleration * projected_time**2)
+
+            projected_position, projected_velocity = reel_estimator.estimate(
+                projected_time
             )
-            projected_velocity = velocity + acceleration * projected_time
+            projected_target, _ = target_estimator.estimate(projected_time)
 
-            # If the projected position appears to hit the edge, then we reflect the velocity to simulate bouncing
+            # Improve deceleration stability
 
-            projected_error = target - projected_position
+            _, target_velocity, target_accleration = target_estimator.state
 
-            max_target_speed = 0.8
+            # if np.sign(target_velocity) != np.sign(target_accleration):
+            # projected_target = (projected_target + target) / 2
 
-            if (
-                # If the fish is almost completely on the left
-                not target < width / 2
-                # and not (will_crash and projected_velocity > 0.33)
-                and (
-                    (
-                        (projected_error > 0 or projected_velocity < -max_target_speed)
-                        and not projected_velocity > max_target_speed
+            # projected_position = np.clip(projected_position, left_edge, right_edge)
+            # projected_target = np.clip(projected_target, left_edge, right_edge)
+
+            projected_error = projected_target - projected_position
+
+            # _, projected_target_velocity, _ = target_estimator.state
+            # projected_error += 0.2 * (projected_target_velocity - projected_velocity)
+
+            pydirectinput.moveTo(
+                int(
+                    np.clip(
+                        reel_rect[0] + reel_rect[2] * projected_position,
+                        reel_rect[0],
+                        reel_rect[0] + reel_rect[2],
                     )
-                    or (target > 1 - width and projected_position < 1 - (width / 2))
-                )
-            ):
-                pydirectinput.mouseDown(button="left")
+                ),
+                int(reel_rect[1] + (reel_rect[3] / 2)),
+            )
+
+            max_target_speed = 3
+
+            hold = False
+            edge_tolerance = 0
+
+            if target >= left_edge + edge_tolerance:
+                if (
+                    (projected_error > 0 or projected_velocity < -max_target_speed)
+                    and not projected_velocity > max_target_speed
+                ) or target > right_edge - edge_tolerance:
+                    hold = True
+
+            if hold:
+                if not is_holding:
+                    pydirectinput.mouseDown(button="left")
+                    is_holding = True
             else:
                 pydirectinput.mouseUp(button="left")
+                is_holding = False
 
-            time.sleep(1 / 20)
+            time.sleep(1 / 15)
 
         if was_reeling:
             pydirectinput.mouseUp(button="left")
-            time.sleep(2.5)
+            time.sleep(3.5)
 
         if not (was_shaking or was_reeling):
             time.sleep(0.5)
