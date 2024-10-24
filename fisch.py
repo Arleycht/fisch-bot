@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class Estimator():
+class KinematicEstimator():
     def __init__(self):
         self.position = 0
         self.velocity = 0
@@ -16,10 +16,10 @@ class Estimator():
         self.acceleration = (self.velocity - prev_velocity) / dt
 
 
-class StateEstimator():
+class ReelStateEstimator():
     def __init__(self):
-        self.reel = Estimator()
-        self.fish = Estimator()
+        self.reel = KinematicEstimator()
+        self.fish = KinematicEstimator()
 
         self.forces = [0, 0]
         self.current_time = 0

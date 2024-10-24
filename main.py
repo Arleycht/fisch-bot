@@ -199,7 +199,7 @@ def main():
         last_reel_check_time = 0
         last_time = time.time() - 0.1
 
-        estimator = fisch.StateEstimator()
+        estimator = fisch.ReelStateEstimator()
         controller = fisch.Controller(
             1.5, 0.1, 0.1, clip_error=True, error_bounds=(-0.1, 0.1))
 
