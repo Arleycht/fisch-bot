@@ -34,7 +34,7 @@ class ReelStateEstimator():
 
         if self.measure_state == is_holding:
             if elapsed >= dt * 4:
-                if self.is_holding:
+                if is_holding:
                     self.forces[1] = abs(self.reel.acceleration)
                 else:
                     self.forces[0] = abs(self.reel.acceleration)
@@ -57,6 +57,7 @@ class Controller():
         self.error_bounds = error_bounds
 
         self.prev_error = 0
+        self.sum_error = 0
 
     def update(self, error: float, dt: float):
         self.sum_error += self.i * error * dt
