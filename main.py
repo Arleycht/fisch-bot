@@ -8,6 +8,8 @@ import win32gui
 
 from PIL import Image
 
+import fisch
+
 
 # Hard coded areas to screenshot
 reel_rect = (572, 876, 776, 31)
@@ -59,7 +61,8 @@ def get_shake_button_pos(threshold=0.25):
         with mss.mss() as capture:
             image = np.array(capture.grab(capture.monitors[MONITOR_INDEX]))
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        matched = cv2.matchTemplate(image, button, cv2.TM_CCOEFF_NORMED, None, None)
+        matched = cv2.matchTemplate(
+            image, button, cv2.TM_CCOEFF_NORMED, None, None)
         _, max_value, _, max_location = cv2.minMaxLoc(matched)
         a = max_location
         b = (a[0] + button.shape[0], a[1] + button.shape[1])
@@ -194,12 +197,13 @@ def main():
 
         was_reeling = False
         last_reel_check_time = 0
-        last_position = 0
-        last_velocity = -0.5
-        velocity = 0
-        acceleration = -0.5
-
         last_time = time.time() - 0.1
+
+        estimator = fisch.StateEstimator()
+        controller = fisch.Controller(
+            1.5, 0.1, 0.1, clip_error=True, error_bounds=(-0.1, 0.1))
+
+        is_holding = False
 
         while auto_reel:
             if (
@@ -212,48 +216,37 @@ def main():
                 was_reeling = True
                 last_reel_check_time = time.time()
 
-            delta_time = time.time() - last_time
+            dt = time.time() - last_time
             last_time = time.time()
 
             position, width, target = get_reel_state()
 
             # Update kinematic metrics
 
-            velocity = (position - last_position) / delta_time
-            acceleration = (velocity - last_velocity) / delta_time
+            estimator.update(position, target, is_holding, dt)
 
-            last_position = position
-            last_velocity = velocity
+            if estimator.forces[0] > 0 and estimator.forces[1] > 0:
+                input_ratio = estimator.forces[1] / estimator.forces[0]
+                input_ratio = np.clip(input_ratio, 0.5, 2)
+            else:
+                input_ratio = 1
 
-            projected_time = 0.2
-            projected_position = (
-                position
-                + (velocity * projected_time)
-                + (0.5 * acceleration * projected_time**2)
-            )
-            projected_velocity = velocity + acceleration * projected_time
+            error = target - position
 
-            # If the projected position appears to hit the edge, then we reflect the velocity to simulate bouncing
+            if error < 0:
+                error *= input_ratio
+            elif error > 0:
+                error /= input_ratio
 
-            projected_error = target - projected_position
+            controller.error_bounds = (-width * 0.1, width * 0.1)
+            control_value = controller.update(error, dt)
 
-            max_target_speed = 0.8
-
-            if (
-                # If the fish is almost completely on the left
-                not target < width / 2
-                # and not (will_crash and projected_velocity > 0.33)
-                and (
-                    (
-                        (projected_error > 0 or projected_velocity < -max_target_speed)
-                        and not projected_velocity > max_target_speed
-                    )
-                    or (target > 1 - width and projected_position < 1 - (width / 2))
-                )
-            ):
+            if control_value > 0:
                 pydirectinput.mouseDown(button="left")
+                is_holding = True
             else:
                 pydirectinput.mouseUp(button="left")
+                is_holding = False
 
             time.sleep(1 / 20)
 
