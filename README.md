@@ -2,6 +2,8 @@
 
 A proof of concept automated fishing script for the Roblox game Fisch using computer vision.
 
+Also known as a fisch macro, fisch bot, fisch script.
+
 ## Possible Improvements
 
 - Scale invariance in the shake button search.
