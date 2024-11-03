@@ -11,6 +11,14 @@ from matplotlib import pyplot as plt
 import fisch
 
 
+plot_controller_data = False
+
+MONITOR_INDEX = 0
+
+auto_cast = False
+auto_shake = True
+auto_reel = True
+
 use_right_docked_window = False
 
 # Hard coded areas to screenshot
@@ -24,13 +32,6 @@ else:
     reel_prompt = cv2.imread("reel_prompt_half.png", cv2.IMREAD_UNCHANGED)
 
 reel_prompt = cv2.cvtColor(reel_prompt, cv2.COLOR_BGR2GRAY)
-
-MONITOR_INDEX = 0
-auto_cast = False
-auto_shake = True
-auto_reel = True
-
-plot_controller_data = False
 
 button_background = cv2.imread("base_button.png", cv2.IMREAD_UNCHANGED)
 button_text = cv2.imread("base_text.png", cv2.IMREAD_UNCHANGED)
