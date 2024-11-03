@@ -8,11 +8,11 @@ Also known as a fisch macro, fisch bot, fisch script.
 
 It is recommended to use a Python virtual environment to run this script.
 
-You can do this by opening a command prompt terminal in the repository directory and running `python -m venv .venv` to create a virtual environment in the `.venv` directory.
-
-To activate the virtual environment, you can then run `.venv\Scripts\activate.bat`
-
-Install the requirements using `pip install -r requirements.txt`
+- Open a command prompt terminal in the repository directory and run `python -m venv .venv` to create a virtual environment in the `.venv` directory.
+- Activate the virtual environment: `.venv\Scripts\activate.bat`
+- Install the requirements: `pip install -r requirements.txt`.
+- Run the script: `python main.py`.
+  - Terminate it by closing the command prompt window or put the window into focus and press `Ctrl+C` to break out of the script.
 
 Currently, the numbers are configured for a single 1920x1080 monitor with the Roblox window is docked to the right. You can dock it to the right by either dragging the window to the right of the screen or pressing `Windows Key + Right Arrow`.
 
