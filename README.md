@@ -6,7 +6,7 @@ Also known as a fisch macro, fisch bot, fisch script.
 
 ## Setup and Usage
 
-It is recommended to use a Python virtual environment so run this script.
+It is recommended to use a Python virtual environment to run this script.
 
 You can do this by opening a command prompt terminal in the repository directory and running `python -m venv .venv` to create a virtual environment in the `.venv` directory.
 
