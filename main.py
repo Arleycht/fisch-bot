@@ -94,14 +94,13 @@ def is_reeling():
             )
         )
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    image = (image > int(255 * 0.7)).astype(np.uint8) * 255
 
     prompt_match = cv2.matchTemplate(
         image, reel_prompt, cv2.TM_CCOEFF_NORMED, None, None
     )
     _, max_value, _, _ = cv2.minMaxLoc(prompt_match)
 
-    return max_value > 0.75
+    return max_value > 0.5
 
 
 def get_reel_state():
