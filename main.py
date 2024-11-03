@@ -4,74 +4,75 @@ import keyboard
 import numpy as np
 import pydirectinput
 import time
-import win32gui
+import pywinctl
 
-from PIL import Image
+from matplotlib import pyplot as plt
 
 import fisch
 
 
 # Hard coded areas to screenshot
-reel_rect = (572, 876, 776, 31)
 reel_prompt_rect = (870, 790, 176, 16)
+reel_rect = (572, 876, 776, 31)
+# reel_prompt_rect = (1354, 815, 168, 46)
+# reel_rect = (1246, 892, 387, 15)
 
 MONITOR_INDEX = 0
 auto_cast = False
 auto_shake = True
 auto_reel = True
 
+plot_controller_data = False
 
-def paste(
-    background: Image.Image,
-    foreground: Image.Image,
-    position=(0, 0),
-    background_alpha=1,
-    foreground_alpha=1,
-):
-    background = background.copy().convert("RGBA")
-    foreground = foreground.convert("RGBA")
-
-    alpha = background.split()[3]
-    alpha = alpha.point(lambda x: x * background_alpha)
-    background.putalpha(alpha)
-
-    alpha = foreground.split()[3]
-    alpha = alpha.point(lambda x: x * foreground_alpha)
-    foreground.putalpha(alpha)
-
-    background.paste(foreground, position, foreground)
-
-    return background
-
-
-button_background = Image.open("base_button.png")
-button_text = Image.open("base_text.png")
-button_template = paste(button_background, button_text, background_alpha=0.6)
+button_background = cv2.imread("base_button.png", cv2.IMREAD_UNCHANGED)
+button_text = cv2.imread("base_text.png", cv2.IMREAD_UNCHANGED)
+button_template = fisch.paste(button_background, button_text, background_alpha=0.6)
 button_template = cv2.cvtColor(np.array(button_template), cv2.COLOR_BGR2GRAY)
-button_scales = [121, 205]
+button_scales = [
+    115,  # Half window sizes
+    190,
+    121,  # Maximized window sizes
+    203,
+]
 
-reel_prompt = np.array(Image.open("reel_prompt.png"))
-reel_prompt = cv2.cvtColor(reel_prompt, cv2.COLOR_RGBA2GRAY)
+# reel_prompt = cv2.imread("reel_prompt.png")
+reel_prompt = cv2.imread("reel_prompt_half.png", cv2.IMREAD_UNCHANGED)
+reel_prompt = cv2.cvtColor(reel_prompt, cv2.COLOR_BGR2GRAY)
 
 
-def get_shake_button_pos(threshold=0.25):
+def get_shake_button_pos(image, threshold=0.45):
+    a = cv2.GaussianBlur(image, (3, 3), 0)
+    a = cv2.Sobel(
+        a, cv2.CV_16S, 1, 1, ksize=3, scale=1, delta=0, borderType=cv2.BORDER_DEFAULT
+    )
+    a = cv2.convertScaleAbs(a)
+
     for scale in button_scales:
-        button = cv2.resize(button_template, (scale, scale))
+        b = cv2.resize(button_template, (scale, scale))
+        b = cv2.GaussianBlur(b, (3, 3), 0)
+        b = cv2.Sobel(
+            b,
+            cv2.CV_16S,
+            1,
+            1,
+            ksize=3,
+            scale=1,
+            delta=0,
+            borderType=cv2.BORDER_DEFAULT,
+        )
+        b = cv2.convertScaleAbs(b)
 
-        with mss.mss() as capture:
-            image = np.array(capture.grab(capture.monitors[MONITOR_INDEX]))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        matched = cv2.matchTemplate(
-            image, button, cv2.TM_CCOEFF_NORMED, None, None)
+        matched = cv2.matchTemplate(a, b, cv2.TM_CCOEFF_NORMED, None, None)
         _, max_value, _, max_location = cv2.minMaxLoc(matched)
-        a = max_location
-        b = (a[0] + button.shape[0], a[1] + button.shape[1])
-
-        x = (a[0] + b[0]) // 2
-        y = (a[1] + b[1]) // 2
 
         if max_value > threshold:
-            return (x, y)
+            top_left = max_location
+            bottom_right = (top_left[0] + b.shape[0], top_left[1] + b.shape[1])
+
+            center_x = (top_left[0] + bottom_right[0]) // 2
+            center_y = (top_left[1] + bottom_right[1]) // 2
+
+            return (center_x, center_y)
 
     return (-1, 1)
 
@@ -103,24 +104,25 @@ def get_reel_state():
     with mss.mss() as sct:
         image = np.array(
             sct.grab(
-                {
-                    "left": reel_rect[0],
-                    "top": reel_rect[1],
-                    "width": reel_rect[2],
-                    "height": reel_rect[3],
-                }
+                (
+                    reel_rect[0],
+                    reel_rect[1],
+                    reel_rect[0] + reel_rect[2],
+                    reel_rect[1] + reel_rect[3],
+                )
             )
         )
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    fish = cv2.inRange(image, 70, 80)
-    fish = cv2.morphologyEx(fish, cv2.MORPH_OPEN, np.ones((5, 7)))
+    fish = cv2.inRange(grayscale, 70, 80)
+    fish = cv2.morphologyEx(fish, cv2.MORPH_OPEN, np.ones((8, 4)))
+    fish = cv2.morphologyEx(fish, cv2.MORPH_CLOSE, np.ones((8, 4)))
     fish_rect = cv2.boundingRect(fish)
 
-    current = cv2.equalizeHist(image)
-    current = cv2.inRange(current, 150, 255)
-    current = cv2.morphologyEx(current, cv2.MORPH_OPEN, np.ones((127, 127)))
-    current_rect = cv2.boundingRect(cv2.inRange(current, 200, 255))
+    current = cv2.morphologyEx(grayscale, cv2.MORPH_CLOSE, np.ones((16, 16)))
+    current = cv2.morphologyEx(current, cv2.MORPH_OPEN, np.ones((16, 16)))
+    current = cv2.inRange(current, current.max().item() - 10, 255)
+    current_rect = cv2.boundingRect(current)
 
     fish_position = fish_rect[0] + (fish_rect[2] // 2)
     fish_position /= reel_rect[2]
@@ -131,8 +133,13 @@ def get_reel_state():
     return current_position, current_rect[2] / reel_rect[2], fish_position
 
 
-def get_window_title():
-    return win32gui.GetWindowText(win32gui.GetForegroundWindow())
+def get_is_window_focused():
+    return pywinctl.getActiveWindowTitle() == "Roblox"
+
+
+def get_active_window_rect():
+    (x0, y0, x1, y1) = pywinctl.getActiveWindow().rect
+    return (x0, y0, x1 - x0, y1 - y0)
 
 
 def toggle_auto_cast():
@@ -151,18 +158,19 @@ def toggle_auto_reel():
 
 
 def main():
-    pydirectinput.PAUSE = 0
-
     keyboard.add_hotkey("ctrl+shift+c", toggle_auto_cast)
     keyboard.add_hotkey("ctrl+shift+f", toggle_auto_shake)
     keyboard.add_hotkey("ctrl+shift+r", toggle_auto_reel)
 
+    pydirectinput.PAUSE = 0
+
     while True:
-        if get_window_title() != "Roblox":
+        if not get_is_window_focused():
             time.sleep(1.5)
             continue
 
         # Cast
+
         if auto_cast:
             pydirectinput.moveTo(
                 reel_rect[0] + reel_rect[2] // 2, reel_rect[1] + reel_rect[3]
@@ -173,82 +181,151 @@ def main():
             pydirectinput.mouseUp(button="left")
             time.sleep(2)
 
-        # Shake button loop
+        # Shake
+
         was_shaking = False
 
-        while auto_shake:
-            (x, y) = get_shake_button_pos(threshold=0.25)
+        while auto_shake and get_is_window_focused():
+            (ox, oy, w, h) = get_active_window_rect()
+
+            with mss.mss() as capture:
+                image = np.array(capture.grab((ox, oy, ox + w, oy + h)))
+
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+            (x, y) = get_shake_button_pos(image)
 
             if x >= 0 and y >= 0:
                 was_shaking = True
+
+                x += ox
+                y += oy
 
                 pydirectinput.moveTo(x + button_template.shape[1] // 6, y + 10)
                 time.sleep(0.02)
                 pydirectinput.moveTo(x + button_template.shape[1] // 6, y)
                 time.sleep(0.08)
                 pydirectinput.click()
-                time.sleep(np.random.uniform(0.4, 0.6))
+                time.sleep(np.random.uniform(0.4, 0.5))
             else:
                 break
 
+        # Reel
+
         if was_shaking:
             # Wait for reeling minigame to start
-            time.sleep(1.5)
+            time.sleep(1.75)
 
         was_reeling = False
         last_reel_check_time = 0
-        last_time = time.time() - 0.1
+        dt = 1 / 60
 
         estimator = fisch.ReelStateEstimator()
         controller = fisch.Controller(
-            1.5, 0.1, 0.1, clip_error=True, error_bounds=(-0.1, 0.1))
+            1.5, 0.45, 0.05, clip_error=True, error_bounds=(-0.5, 0.5)
+        )
+
+        start_time = time.time()
 
         is_holding = False
 
+        positions = []
+        target_positions = []
+        velocities = []
+        accelerations = []
+
         while auto_reel:
-            if (
-                time.time() - last_reel_check_time > 0.5
-                or get_window_title() != "Roblox"
-            ):
+            if time.time() - last_reel_check_time > 0.2 or not get_is_window_focused():
                 if not is_reeling():
                     break
 
                 was_reeling = True
                 last_reel_check_time = time.time()
 
-            dt = time.time() - last_time
-            last_time = time.time()
-
             position, width, target = get_reel_state()
+
+            # Clip
+
+            position = np.clip(position, width, 1 - width / 2)
 
             # Update kinematic metrics
 
             estimator.update(position, target, is_holding, dt)
 
-            if estimator.forces[0] > 0 and estimator.forces[1] > 0:
-                input_ratio = estimator.forces[1] / estimator.forces[0]
-                input_ratio = np.clip(input_ratio, 0.5, 2)
-            else:
-                input_ratio = 1
+            positions.append(estimator.reel.position)
+            velocities.append(estimator.reel.velocity)
+            accelerations.append(estimator.reel.acceleration)
+            target_positions.append(estimator.fish.position)
 
             error = target - position
 
-            if error < 0:
-                error *= input_ratio
-            elif error > 0:
-                error /= input_ratio
+            if estimator.forces[0] > 0 and estimator.forces[1] > 0:
+                input_ratio = estimator.forces[1] / estimator.forces[0]
+
+                if error > 0:
+                    error /= input_ratio
+                elif error < 0:
+                    error *= input_ratio
+
+            pydirectinput.moveTo(
+                int(reel_rect[0] + reel_rect[2] * np.clip(target, 0, 1)),
+                int(reel_rect[1] + reel_rect[3] / 2),
+            )
+
+            elapsed_percentage = (time.time() - start_time) / 2
+
+            if elapsed_percentage < 1:
+                a = (target - position) + (width * 0.1)
+
+                error = a + (error - a) * elapsed_percentage
 
             controller.error_bounds = (-width * 0.1, width * 0.1)
             control_value = controller.update(error, dt)
 
             if control_value > 0:
-                pydirectinput.mouseDown(button="left")
+                if not is_holding:
+                    pydirectinput.mouseDown(button="left")
+
                 is_holding = True
             else:
                 pydirectinput.mouseUp(button="left")
                 is_holding = False
 
-            time.sleep(1 / 20)
+            time.sleep(dt)
+
+        if len(positions) > 4 and plot_controller_data:
+            valid_slice = slice(6, -6)
+
+            positions = positions[valid_slice]
+            velocities = velocities[valid_slice]
+            accelerations = accelerations[valid_slice]
+            target_positions = target_positions[valid_slice]
+
+            time_interval = np.linspace(0, 1, len(positions))
+
+            fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+
+            axs[0].plot(time_interval, positions, label="Position", color="blue")
+            axs[0].plot(time_interval, target_positions, label="Target", color="red")
+            axs[0].set_ylabel("Position")
+            axs[0].legend()
+            axs[0].grid()
+
+            axs[1].plot(time_interval, velocities, label="Velocity", color="orange")
+            axs[1].set_ylabel("Velocity")
+            axs[1].legend()
+            axs[1].grid()
+
+            axs[2].plot(
+                time_interval, accelerations, label="Acceleration", color="green"
+            )
+            axs[2].set_xlabel("Time (s)")
+            axs[2].set_ylabel("Acceleration")
+            axs[2].legend()
+            axs[2].grid()
+
+            plt.tight_layout()
+            fig.savefig("fig.png")
 
         if was_reeling:
             pydirectinput.mouseUp(button="left")
