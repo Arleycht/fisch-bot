@@ -16,7 +16,7 @@ It is recommended to use a Python virtual environment to run this script.
 
 Currently, the numbers are configured for a single 1920x1080 monitor with the Roblox window maximized (not fullscreen).
 
-There is a second configuration available by switching out the commented alternative reel rects where the window is docked to the right. You can dock it to the right by either dragging the window to the right of the screen or pressing `Windows Key + Right Arrow`.
+There is a second configuration available by toggling the `use_right_docked_window` flag where the window is docked to the right. You can dock the Roblox window to the right by either dragging the window to the right of the screen or pressing `Windows Key + Right Arrow`.
 
 Hotkeys are currently configured as so:
 

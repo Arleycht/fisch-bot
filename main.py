@@ -11,11 +11,19 @@ from matplotlib import pyplot as plt
 import fisch
 
 
+use_right_docked_window = False
+
 # Hard coded areas to screenshot
-reel_prompt_rect = (870, 790, 176, 16)
-reel_rect = (572, 876, 776, 31)
-# reel_prompt_rect = (1354, 815, 168, 46)
-# reel_rect = (1246, 892, 387, 15)
+if not use_right_docked_window:
+    reel_prompt_rect = (870, 790, 176, 16)
+    reel_rect = (572, 876, 776, 31)
+    reel_prompt = cv2.imread("reel_prompt.png", cv2.IMREAD_UNCHANGED)
+else:
+    reel_prompt_rect = (1354, 815, 168, 46)
+    reel_rect = (1246, 892, 387, 15)
+    reel_prompt = cv2.imread("reel_prompt_half.png", cv2.IMREAD_UNCHANGED)
+
+reel_prompt = cv2.cvtColor(reel_prompt, cv2.COLOR_BGR2GRAY)
 
 MONITOR_INDEX = 0
 auto_cast = False
@@ -34,10 +42,6 @@ button_scales = [
     121,  # Maximized window sizes
     203,
 ]
-
-# reel_prompt = cv2.imread("reel_prompt.png")
-reel_prompt = cv2.imread("reel_prompt_half.png", cv2.IMREAD_UNCHANGED)
-reel_prompt = cv2.cvtColor(reel_prompt, cv2.COLOR_BGR2GRAY)
 
 
 def get_shake_button_pos(image, threshold=0.45):
