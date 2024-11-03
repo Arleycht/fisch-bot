@@ -14,6 +14,14 @@ To activate the virtual environment, you can then run `.venv\Scripts\activate.ba
 
 Install the requirements using `pip install -r requirements.txt`
 
+Currently, the numbers are configured for a single 1920x1080 monitor with the Roblox window is docked to the right. You can dock it to the right by either dragging the window to the right of the screen or pressing `Windows Key + Right Arrow`.
+
+Hotkeys are currently configured as so:
+
+- `Ctrl+Shift+C` to toggle auto-casting
+- `Ctrl+Shift+F` to toggle auto-shaking
+- `Ctrl+Shift+R` to toggle auto-reeling
+
 ## Possible Improvements
 
 - Not hard coding screen rects.
