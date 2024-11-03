@@ -12,7 +12,7 @@ You can do this by opening a command prompt terminal in the repository directory
 
 To activate the virtual environment, you can then run `.venv\Scripts\activate.bat`
 
-Install the requirements using `pip -r requirements.txt`
+Install the requirements using `pip install -r requirements.txt`
 
 ## Possible Improvements
 
