@@ -44,27 +44,27 @@ button_scales = [
 ]
 
 
-def get_shake_button_pos(image, threshold=0.45):
-    a = cv2.GaussianBlur(image, (3, 3), 0)
-    a = cv2.Sobel(
-        a, cv2.CV_16S, 1, 1, ksize=3, scale=1, delta=0, borderType=cv2.BORDER_DEFAULT
+def process_sobel(image):
+    image = cv2.GaussianBlur(image, (3, 3), 0)
+    image = cv2.Sobel(
+        image,
+        cv2.CV_16S,
+        1,
+        1,
+        ksize=3,
+        scale=1,
+        delta=0,
+        borderType=cv2.BORDER_DEFAULT,
     )
-    a = cv2.convertScaleAbs(a)
+    return cv2.convertScaleAbs(image)
+
+
+def get_shake_button_pos(image, threshold=0.45):
+    a = process_sobel(image)
 
     for scale in button_scales:
         b = cv2.resize(button_template, (scale, scale))
-        b = cv2.GaussianBlur(b, (3, 3), 0)
-        b = cv2.Sobel(
-            b,
-            cv2.CV_16S,
-            1,
-            1,
-            ksize=3,
-            scale=1,
-            delta=0,
-            borderType=cv2.BORDER_DEFAULT,
-        )
-        b = cv2.convertScaleAbs(b)
+        b = process_sobel(b)
 
         matched = cv2.matchTemplate(a, b, cv2.TM_CCOEFF_NORMED, None, None)
         _, max_value, _, max_location = cv2.minMaxLoc(matched)
