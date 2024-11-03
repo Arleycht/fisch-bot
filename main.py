@@ -85,12 +85,12 @@ def is_reeling():
     with mss.mss() as sct:
         image = np.array(
             sct.grab(
-                {
-                    "left": reel_prompt_rect[0],
-                    "top": reel_prompt_rect[1],
-                    "width": reel_prompt_rect[2],
-                    "height": reel_prompt_rect[3],
-                }
+                (
+                    reel_prompt_rect[0],
+                    reel_prompt_rect[1],
+                    reel_prompt_rect[0] + reel_prompt_rect[2],
+                    reel_prompt_rect[1] + reel_prompt_rect[3],
+                )
             )
         )
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
