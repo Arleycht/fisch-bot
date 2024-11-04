@@ -256,10 +256,11 @@ def main():
 
             estimator.update(position, target, is_holding, dt)
 
-            positions.append(estimator.reel.position)
-            velocities.append(estimator.reel.velocity)
-            accelerations.append(estimator.reel.acceleration)
-            target_positions.append(estimator.fish.position)
+            if plot_controller_data:
+                positions.append(estimator.reel.position)
+                velocities.append(estimator.reel.velocity)
+                accelerations.append(estimator.reel.acceleration)
+                target_positions.append(estimator.fish.position)
 
             error = target - position
 
@@ -297,7 +298,7 @@ def main():
 
             time.sleep(dt)
 
-        if len(positions) > 4 and plot_controller_data:
+        if plot_controller_data and len(positions) > 4:
             valid_slice = slice(6, -6)
 
             positions = positions[valid_slice]
