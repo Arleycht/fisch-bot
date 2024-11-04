@@ -263,7 +263,7 @@ def main():
 
             # Clip
 
-            position = np.clip(position, width, 1 - width / 2)
+            position = np.clip(position, width / 2, 1 - width / 2)
 
             # Update kinematic metrics
 
