@@ -238,9 +238,7 @@ def main():
         dt = 1 / 60
 
         estimator = fisch.ReelStateEstimator()
-        controller = fisch.Controller(
-            1, 0.4, 0, clip_error=True, error_bounds=(-0.5, 0.5)
-        )
+        controller = fisch.Controller(1, 0.4, 0)
 
         start_time = time.time()
 
@@ -277,7 +275,7 @@ def main():
 
             error = target - position
 
-            elapsed_percentage = (time.time() - start_time) / 2
+            elapsed_percentage = (time.time() - start_time) / 1.5
 
             if elapsed_percentage < 1:
                 error += width * 0.1 * elapsed_percentage
@@ -295,7 +293,6 @@ def main():
                 int(reel_rect[1] + reel_rect[3] / 2),
             )
 
-            controller.error_bounds = (-width * 0.1, width * 0.1)
             control_value = controller.update(error, dt)
 
             if control_value > 0:
