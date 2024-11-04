@@ -77,9 +77,9 @@ class ReelStateEstimator:
         if self.measure_state == is_holding:
             if elapsed >= 8 * dt:
                 if self.reel.acceleration != 0:
-                    if is_holding:
+                    if is_holding and self.reel.acceleration >= 0:
                         self.forces[1] = abs(self.reel.acceleration)
-                    else:
+                    elif self.reel.acceleration <= 0:
                         self.forces[0] = abs(self.reel.acceleration)
 
                 self.last_measure_time = self.current_time
