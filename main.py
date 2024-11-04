@@ -121,7 +121,20 @@ def get_reel_state():
     fish = cv2.inRange(grayscale, 70, 80)
     fish = cv2.morphologyEx(fish, cv2.MORPH_OPEN, np.ones((8, 4)))
     fish = cv2.morphologyEx(fish, cv2.MORPH_CLOSE, np.ones((8, 4)))
-    fish_rect = cv2.boundingRect(fish)
+
+    # Get all rectangular areas and pick the one with smallest width
+
+    contours, _ = cv2.findContours(fish, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    rects = [cv2.boundingRect(contour) for contour in contours]
+
+    fish_rect = (-1, -1, 0, 0)
+
+    if len(rects) > 0:
+        fish_rect = rects[0]
+
+        for rect in rects:
+            if rect[2] < fish_rect[2]:
+                fish_rect = rect
 
     current = cv2.morphologyEx(grayscale, cv2.MORPH_CLOSE, np.ones((16, 16)))
     current = cv2.morphologyEx(current, cv2.MORPH_OPEN, np.ones((16, 16)))
