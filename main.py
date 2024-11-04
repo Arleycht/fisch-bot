@@ -210,7 +210,7 @@ def main():
                 pydirectinput.moveTo(x + button_template.shape[1] // 6, y)
                 time.sleep(0.08)
                 pydirectinput.click()
-                time.sleep(np.random.uniform(0.4, 0.5))
+                time.sleep(0.6)
             else:
                 break
 
@@ -218,7 +218,7 @@ def main():
 
         if was_shaking:
             # Wait for reeling minigame to start
-            time.sleep(1.75)
+            time.sleep(1.25)
 
         was_reeling = False
         last_reel_check_time = 0
