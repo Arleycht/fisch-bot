@@ -44,6 +44,11 @@ button_scales = [
     203,
 ]
 
+fish_color = np.array((220, 26, 35))
+fish_color = np.multiply(fish_color, (0.5, 2.55, 2.55))
+lower_fish_color = fish_color - np.array((5, 5, 5))
+upper_fish_color = fish_color + np.array((5, 5, 5))
+
 
 def process_sobel(image):
     image = cv2.GaussianBlur(image, (3, 3), 0)
@@ -116,35 +121,25 @@ def get_reel_state():
                 )
             )
         )
-    grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    bright = cv2.inRange(hsv[:, :, 2], 25 * 2.55, 255)
 
-    fish = cv2.inRange(grayscale, 70, 80)
-    fish = cv2.morphologyEx(fish, cv2.MORPH_OPEN, np.ones((8, 4)))
-    fish = cv2.morphologyEx(fish, cv2.MORPH_CLOSE, np.ones((8, 4)))
+    h = reel_rect[3] // 2
 
-    # Get all rectangular areas and pick the one with smallest width
+    fish = cv2.inRange(hsv, lower_fish_color, upper_fish_color)
+    fish = cv2.morphologyEx(fish, cv2.MORPH_OPEN, np.ones((h, 4)))
+    fish = cv2.morphologyEx(fish, cv2.MORPH_CLOSE, np.ones((h, 4)))
+    fish_rect = cv2.boundingRect(fish)
 
-    contours, _ = cv2.findContours(fish, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    rects = [cv2.boundingRect(contour) for contour in contours]
-
-    fish_rect = (-1, -1, 0, 0)
-
-    if len(rects) > 0:
-        fish_rect = rects[0]
-
-        for rect in rects:
-            if rect[2] < fish_rect[2]:
-                fish_rect = rect
-
-    current = cv2.morphologyEx(grayscale, cv2.MORPH_CLOSE, np.ones((16, 16)))
-    current = cv2.morphologyEx(current, cv2.MORPH_OPEN, np.ones((16, 16)))
+    current = cv2.morphologyEx(bright, cv2.MORPH_CLOSE, np.ones((h, 16)))
+    current = cv2.morphologyEx(current, cv2.MORPH_OPEN, np.ones((h, 16)))
     current = cv2.inRange(current, current.max().item() - 10, 255)
     current_rect = cv2.boundingRect(current)
 
     fish_position = fish_rect[0] + (fish_rect[2] // 2)
-    fish_position /= reel_rect[2]
-
     current_position = current_rect[0] + (current_rect[2] // 2)
+
+    fish_position /= reel_rect[2]
     current_position /= reel_rect[2]
 
     return current_position, current_rect[2] / reel_rect[2], fish_position
@@ -223,7 +218,7 @@ def main():
                 pydirectinput.moveTo(x + button_template.shape[1] // 6, y)
                 time.sleep(0.08)
                 pydirectinput.click()
-                time.sleep(0.6)
+                time.sleep(0.5)
             else:
                 break
 
@@ -238,7 +233,7 @@ def main():
         dt = 1 / 60
 
         estimator = fisch.ReelStateEstimator()
-        controller = fisch.Controller(1, 0.4, 0)
+        controller = fisch.Controller(1, 0.5, 0)
 
         start_time = time.time()
 
@@ -262,6 +257,7 @@ def main():
             # Clip
 
             position = np.clip(position, width / 2, 1 - width / 2)
+            target = np.clip(target, (width * 0.9 / 2), 1 - (width * 0.9 / 2))
 
             # Update kinematic metrics
 
@@ -273,12 +269,16 @@ def main():
                 accelerations.append(estimator.reel.acceleration)
                 target_positions.append(estimator.fish.position)
 
+            # Initial compensation
+
+            alpha = (time.time() - start_time) / 2
+
+            if alpha < 1:
+                target += (1 - alpha) * 0.025
+
             error = target - position
 
-            elapsed_percentage = (time.time() - start_time) / 1.5
-
-            if elapsed_percentage < 1:
-                error += width * 0.1 * elapsed_percentage
+            # Acceleration compensation
 
             if estimator.forces[0] > 0 and estimator.forces[1] > 0:
                 input_ratio = estimator.forces[1] / estimator.forces[0]
