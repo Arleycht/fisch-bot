@@ -277,6 +277,11 @@ def main():
 
             error = target - position
 
+            elapsed_percentage = (time.time() - start_time) / 2
+
+            if elapsed_percentage < 1:
+                error += width * 0.1 * elapsed_percentage
+
             if estimator.forces[0] > 0 and estimator.forces[1] > 0:
                 input_ratio = estimator.forces[1] / estimator.forces[0]
 
@@ -289,13 +294,6 @@ def main():
                 int(reel_rect[0] + reel_rect[2] * np.clip(target, 0, 1)),
                 int(reel_rect[1] + reel_rect[3] / 2),
             )
-
-            elapsed_percentage = (time.time() - start_time) / 2
-
-            if elapsed_percentage < 1:
-                a = (target - position) + (width * 0.1)
-
-                error = a + (error - a) * elapsed_percentage
 
             controller.error_bounds = (-width * 0.1, width * 0.1)
             control_value = controller.update(error, dt)
