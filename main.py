@@ -239,7 +239,7 @@ def main():
 
         estimator = fisch.ReelStateEstimator()
         controller = fisch.Controller(
-            1.5, 0.45, 0.05, clip_error=True, error_bounds=(-0.5, 0.5)
+            1, 0.4, 0, clip_error=True, error_bounds=(-0.5, 0.5)
         )
 
         start_time = time.time()
