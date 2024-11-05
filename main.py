@@ -77,15 +77,12 @@ def get_shake_button_pos(image, threshold=0.45):
         _, max_value, _, max_location = cv2.minMaxLoc(matched)
 
         if max_value > threshold:
-            top_left = max_location
-            bottom_right = (top_left[0] + b.shape[0], top_left[1] + b.shape[1])
+            top_left = np.array(max_location)
+            bottom_right = top_left + b.shape
 
-            center_x = (top_left[0] + bottom_right[0]) // 2
-            center_y = (top_left[1] + bottom_right[1]) // 2
+            return (top_left + bottom_right) // 2
 
-            return (center_x, center_y)
-
-    return (-1, 1)
+    return np.array((-1, 1))
 
 
 def is_reeling():
@@ -162,8 +159,7 @@ def get_is_window_focused():
 
 
 def get_active_window_rect():
-    (x0, y0, x1, y1) = pywinctl.getActiveWindow().rect
-    return (x0, y0, x1 - x0, y1 - y0)
+    return pywinctl.getActiveWindow().rect
 
 
 def toggle_auto_cast():
@@ -197,7 +193,7 @@ def main():
 
         if auto_cast:
             pydirectinput.moveTo(
-                reel_rect[0] + reel_rect[2] // 2, reel_rect[1] + reel_rect[3]
+                int(reel_rect[0] + reel_rect[2] / 2), reel_rect[1] + reel_rect[3]
             )
             time.sleep(0.02)
             pydirectinput.mouseDown(button="left")
@@ -210,24 +206,22 @@ def main():
         was_shaking = False
 
         while auto_shake and get_is_window_focused():
-            (ox, oy, w, h) = get_active_window_rect()
+            (x0, y0, x1, y1) = get_active_window_rect()
 
             with mss.mss() as capture:
-                image = np.array(capture.grab((ox, oy, ox + w, oy + h)))
+                image = np.array(capture.grab((x0, y0, x1, y1)))
 
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            pos = get_shake_button_pos(image)
 
-            (x, y) = get_shake_button_pos(image)
-
-            if x >= 0 and y >= 0:
+            if pos[0] >= 0 and pos[1] >= 0:
                 was_shaking = True
 
-                x += ox
-                y += oy
+                pos += (int(x0 + button_template.shape[1] / 6), y0)
 
-                pydirectinput.moveTo(x + button_template.shape[1] // 6, y + 10)
+                pydirectinput.moveTo(pos[0], pos[1] + 10)
                 time.sleep(0.02)
-                pydirectinput.moveTo(x + button_template.shape[1] // 6, y)
+                pydirectinput.moveTo(pos[0], pos[1])
                 time.sleep(0.08)
                 pydirectinput.click()
                 time.sleep(0.5)
@@ -238,7 +232,11 @@ def main():
 
         if was_shaking:
             # Wait for reeling minigame to start
-            time.sleep(1.25)
+            for _ in range(4):
+                if is_reeling():
+                    break
+                else:
+                    time.sleep(0.5)
 
         was_reeling = False
         last_reel_check_time = 0
@@ -350,14 +348,13 @@ def main():
             axs[2].grid()
 
             plt.tight_layout()
-            fig.savefig("fig.png")
+            fig.savefig("response_data.png")
 
         if was_reeling:
             pydirectinput.mouseUp(button="left")
-            time.sleep(2.5)
 
         if not (was_shaking or was_reeling):
-            time.sleep(0.5)
+            time.sleep(1)
 
 
 if __name__ == "__main__":
