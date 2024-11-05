@@ -1,4 +1,5 @@
 import cv2 as cv2
+import datetime
 import mss
 import keyboard
 import numpy as np
@@ -184,14 +185,32 @@ def main():
 
     pydirectinput.PAUSE = 0
 
+    failsafe_active = False
+    last_active_time = time.time()
+
     while True:
+        # AFK fail safe
+
+        last_active_elapsed = time.time() - last_active_time
+
+        if last_active_elapsed > 60 and not failsafe_active:
+            print("No shaking nor reeling detected in 1 minute")
+            print(f"AFK fail safe activated at { datetime.datetime.now() }")
+            failsafe_active = True
+        elif last_active_elapsed > 60 * 10:
+            print(
+                "Last successful shake or reel was over 10 minutes ago, breaking loop"
+            )
+            print(f"Current time { datetime.datetime.now() }")
+            break
+
         if not get_is_window_focused():
             time.sleep(1.5)
             continue
 
         # Cast
 
-        if auto_cast:
+        if auto_cast and not failsafe_active:
             pydirectinput.moveTo(
                 int(reel_rect[0] + reel_rect[2] / 2), reel_rect[1] + reel_rect[3]
             )
@@ -230,7 +249,7 @@ def main():
 
         # Reel
 
-        if was_shaking:
+        if auto_cast or was_shaking:
             # Wait for reeling minigame to start
             for _ in range(4):
                 if is_reeling():
@@ -355,6 +374,20 @@ def main():
 
         if not (was_shaking or was_reeling):
             time.sleep(1)
+        else:
+            if failsafe_active:
+                if was_shaking and was_reeling:
+                    s = "shake and reel"
+                elif was_shaking:
+                    s = "shake"
+                else:
+                    s = "reel"
+
+                print(f"AFK fail safe deactivated after successful { s }")
+                print(f"Current time { datetime.datetime.now() }")
+
+            failsafe_active = False
+            last_active_time = time.time()
 
 
 if __name__ == "__main__":
