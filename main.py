@@ -46,7 +46,7 @@ button_scales = [
 
 fish_color = np.array((220, 26, 35))
 fish_color = np.multiply(fish_color, (0.5, 2.55, 2.55))
-fish_color_epsilon = np.ones_like(fish_color) * 3
+fish_color_epsilon = (1, 3, 3)
 lower_fish_color = fish_color - fish_color_epsilon
 upper_fish_color = fish_color + fish_color_epsilon
 
@@ -122,23 +122,34 @@ def get_reel_state():
                 )
             )
         )
+
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    bright = cv2.inRange(hsv[:, :, 2], 25 * 2.55, 255)
 
-    h = reel_rect[3] // 2
-
+    kernel = np.ones((reel_rect[3] // 2, 3))
     fish = cv2.inRange(hsv, lower_fish_color, upper_fish_color)
-    fish = cv2.morphologyEx(fish, cv2.MORPH_OPEN, np.ones((h, 4)))
-    fish = cv2.morphologyEx(fish, cv2.MORPH_CLOSE, np.ones((h, 4)))
+    fish = cv2.morphologyEx(fish, cv2.MORPH_OPEN, kernel)
+    fish = cv2.morphologyEx(fish, cv2.MORPH_CLOSE, kernel)
     fish_rect = cv2.boundingRect(fish)
 
-    current = cv2.morphologyEx(bright, cv2.MORPH_CLOSE, np.ones((h, 16)))
-    current = cv2.morphologyEx(current, cv2.MORPH_OPEN, np.ones((h, 16)))
-    current = cv2.inRange(current, current.max().item() - 10, 255)
+    _, s, v = cv2.split(hsv)
+
+    v = cv2.bitwise_and(v, cv2.bitwise_not(fish))
+    v_max = v.max().item()
+
+    current = cv2.inRange(v, v_max / 2, 255)
+
+    if v_max < 255:
+        composite = s.astype(np.uint16) * v
+        c_max = composite.max().item()
+        current &= cv2.inRange(composite, c_max / 2, c_max)
+
+    kernel = np.ones((reel_rect[3] // 2, fish_rect[2]))
+    current = cv2.morphologyEx(current, cv2.MORPH_CLOSE, kernel)
+    current = cv2.morphologyEx(current, cv2.MORPH_OPEN, kernel)
     current_rect = cv2.boundingRect(current)
 
-    fish_position = fish_rect[0] + (fish_rect[2] // 2)
-    current_position = current_rect[0] + (current_rect[2] // 2)
+    fish_position = fish_rect[0] + (fish_rect[2] / 2)
+    current_position = current_rect[0] + (current_rect[2] / 2)
 
     fish_position /= reel_rect[2]
     current_position /= reel_rect[2]
