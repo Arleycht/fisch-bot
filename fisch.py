@@ -58,7 +58,7 @@ class KinematicEstimator:
 
 class ReelStateEstimator:
     def __init__(self):
-        self.reel = KinematicEstimator(window_len=8)
+        self.reel = KinematicEstimator(window_len=6)
         self.fish = KinematicEstimator(window_len=4)
 
         self.forces = [0, 0]
