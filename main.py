@@ -46,8 +46,9 @@ button_scales = [
 
 fish_color = np.array((220, 26, 35))
 fish_color = np.multiply(fish_color, (0.5, 2.55, 2.55))
-lower_fish_color = fish_color - np.array((5, 5, 5))
-upper_fish_color = fish_color + np.array((5, 5, 5))
+fish_color_epsilon = np.ones_like(fish_color) * 3
+lower_fish_color = fish_color - fish_color_epsilon
+upper_fish_color = fish_color + fish_color_epsilon
 
 
 def process_sobel(image):
@@ -271,7 +272,7 @@ def main():
 
             # Initial compensation
 
-            alpha = (time.time() - start_time) / 2
+            alpha = (time.time() - start_time) / 3
 
             if alpha < 1:
                 target += (1 - alpha) * 0.025
