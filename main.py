@@ -262,7 +262,11 @@ def main():
         dt = 1 / 60
 
         estimator = fisch.ReelStateEstimator()
-        controller = fisch.Controller(1, 0.5, 0)
+        controller_gains = {
+            "default": (1, 0.5, 0),
+            "edge": (1, 0, 0),
+        }
+        controller = fisch.Controller()
 
         start_time = time.time()
 
@@ -274,12 +278,14 @@ def main():
         accelerations = []
 
         while auto_reel:
-            if time.time() - last_reel_check_time > 0.2 or not get_is_window_focused():
+            now = time.time()
+
+            if now - last_reel_check_time > 0.1 or not get_is_window_focused():
                 if not is_reeling():
                     break
 
                 was_reeling = True
-                last_reel_check_time = time.time()
+                last_reel_check_time = now
 
             position, width, target = get_reel_state()
 
@@ -300,7 +306,7 @@ def main():
 
             # Initial compensation
 
-            alpha = (time.time() - start_time) / 3
+            alpha = (now - start_time) / 3
 
             if alpha < 1:
                 target += (1 - alpha) * 0.025
@@ -321,6 +327,11 @@ def main():
                 int(reel_rect[0] + reel_rect[2] * np.clip(target, 0, 1)),
                 int(reel_rect[1] + reel_rect[3] / 2),
             )
+
+            if target < width / 2 or target > 1 - width / 2:
+                controller.p, controller.d, controller.i = controller_gains["edge"]
+            else:
+                controller.p, controller.d, controller.i = controller_gains["default"]
 
             control_value = controller.update(error, dt)
 
