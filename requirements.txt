@@ -1,6 +1,11 @@
 keyboard==0.13.5
 mss==9.0.2
-numpy==2.1.2
+numpy==2.1.3
 opencv-python==4.10.0.84
+pillow==11.0.0
 PyDirectInput==1.0.4
+PyMonCtl==0.92
+pywin32==308
+PyWinBox==0.7
 PyWinCtl==0.4.1
+typing_extensions==4.12.2
