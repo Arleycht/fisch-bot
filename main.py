@@ -7,12 +7,8 @@ import pydirectinput
 import time
 import pywinctl
 
-from matplotlib import pyplot as plt
-
 import fisch
 
-
-plot_controller_data = False
 
 MONITOR_INDEX = 0
 
@@ -188,6 +184,8 @@ def main():
     failsafe_active = False
     last_active_time = time.time()
 
+    print(f"Fisch bot is active")
+
     while True:
         # AFK fail safe
 
@@ -272,11 +270,6 @@ def main():
 
         is_holding = False
 
-        positions = []
-        target_positions = []
-        velocities = []
-        accelerations = []
-
         while auto_reel:
             now = time.time()
 
@@ -297,12 +290,6 @@ def main():
             # Update kinematic metrics
 
             estimator.update(position, target, is_holding, dt)
-
-            if plot_controller_data:
-                positions.append(estimator.reel.position)
-                velocities.append(estimator.reel.velocity)
-                accelerations.append(estimator.reel.acceleration)
-                target_positions.append(estimator.fish.position)
 
             # Initial compensation
 
@@ -346,40 +333,6 @@ def main():
 
             time.sleep(dt)
 
-        if plot_controller_data and len(positions) > 4:
-            valid_slice = slice(6, -6)
-
-            positions = positions[valid_slice]
-            velocities = velocities[valid_slice]
-            accelerations = accelerations[valid_slice]
-            target_positions = target_positions[valid_slice]
-
-            time_interval = np.linspace(0, 1, len(positions))
-
-            fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
-
-            axs[0].plot(time_interval, positions, label="Position", color="blue")
-            axs[0].plot(time_interval, target_positions, label="Target", color="red")
-            axs[0].set_ylabel("Position")
-            axs[0].legend()
-            axs[0].grid()
-
-            axs[1].plot(time_interval, velocities, label="Velocity", color="orange")
-            axs[1].set_ylabel("Velocity")
-            axs[1].legend()
-            axs[1].grid()
-
-            axs[2].plot(
-                time_interval, accelerations, label="Acceleration", color="green"
-            )
-            axs[2].set_xlabel("Time (s)")
-            axs[2].set_ylabel("Acceleration")
-            axs[2].legend()
-            axs[2].grid()
-
-            plt.tight_layout()
-            fig.savefig("response_data.png")
-
         if was_reeling:
             pydirectinput.mouseUp(button="left")
 
@@ -399,6 +352,8 @@ def main():
 
             failsafe_active = False
             last_active_time = time.time()
+
+    print(f"Fisch bot is inactive")
 
 
 if __name__ == "__main__":
