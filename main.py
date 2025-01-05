@@ -10,10 +10,13 @@ import pywinctl
 import fisch
 
 # Hard coded areas to screenshot
+
 monitor_index = 0
 reel_prompt_rect = (870, 790, 176, 16)
 reel_rect = (572, 876, 776, 31)
 debug_mode = False
+
+# Prepare template images
 
 reel_prompt = cv2.imread("reel_prompt.png", cv2.IMREAD_UNCHANGED)
 reel_prompt = cv2.cvtColor(reel_prompt, cv2.COLOR_BGR2GRAY)
@@ -32,6 +35,8 @@ fish_color = np.multiply(fish_color, (0.5, 2.55, 2.55))
 fish_color_epsilon = (1, 3, 3)
 lower_fish_color = fish_color - fish_color_epsilon
 upper_fish_color = fish_color + fish_color_epsilon
+
+# Runtime variables
 
 auto_cast = False
 auto_shake = True
