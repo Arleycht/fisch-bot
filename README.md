@@ -17,7 +17,7 @@ It is recommended to use a Python virtual environment to run this script.
 
 There is an AFK fail-safe for auto-cast if no shake nor reel minigame is detected after 60 seconds. This will allow Roblox's default AFK timer to tick until completion.
 
-To untrip the fail-safe, you can manually cast your fishing rod to pop up the shake or reel minigame and it will allow reset the fail-safe trigger.
+To untrip the fail-safe, you can manually cast your fishing rod to pop up the shake or reel minigame and it will reset the fail-safe trigger.
 
 If no shake nor reel minigame is detected after 10 minutes, the script will automatically break out of the loop and terminate. These failsafes will also print their time of occurrence in the case that it might line up with an expected server shutdown or otherwise.
 
