@@ -9,25 +9,13 @@ import pywinctl
 
 import fisch
 
-
-MONITOR_INDEX = 0
-
-auto_cast = False
-auto_shake = True
-auto_reel = True
-
-use_right_docked_window = False
-
 # Hard coded areas to screenshot
-if not use_right_docked_window:
-    reel_prompt_rect = (870, 790, 176, 16)
-    reel_rect = (572, 876, 776, 31)
-    reel_prompt = cv2.imread("reel_prompt.png", cv2.IMREAD_UNCHANGED)
-else:
-    reel_prompt_rect = (1354, 815, 168, 46)
-    reel_rect = (1246, 892, 387, 15)
-    reel_prompt = cv2.imread("reel_prompt_half.png", cv2.IMREAD_UNCHANGED)
+monitor_index = 0
+reel_prompt_rect = (870, 790, 176, 16)
+reel_rect = (572, 876, 776, 31)
+debug_mode = False
 
+reel_prompt = cv2.imread("reel_prompt.png", cv2.IMREAD_UNCHANGED)
 reel_prompt = cv2.cvtColor(reel_prompt, cv2.COLOR_BGR2GRAY)
 
 button_background = cv2.imread("base_button.png", cv2.IMREAD_UNCHANGED)
@@ -35,9 +23,7 @@ button_text = cv2.imread("base_text.png", cv2.IMREAD_UNCHANGED)
 button_template = fisch.paste(button_background, button_text, background_alpha=0.6)
 button_template = cv2.cvtColor(np.array(button_template), cv2.COLOR_BGR2GRAY)
 button_scales = [
-    115,  # Half window sizes
-    190,
-    121,  # Maximized window sizes
+    121, # Maximized window sizes
     203,
 ]
 
@@ -46,6 +32,13 @@ fish_color = np.multiply(fish_color, (0.5, 2.55, 2.55))
 fish_color_epsilon = (1, 3, 3)
 lower_fish_color = fish_color - fish_color_epsilon
 upper_fish_color = fish_color + fish_color_epsilon
+
+auto_cast = False
+auto_shake = True
+auto_reel = True
+
+offset_x = 0
+offset_y = 0
 
 
 def process_sobel(image):
@@ -83,14 +76,16 @@ def get_shake_button_pos(image, threshold=0.45):
 
 
 def is_reeling():
+    global offset_x, offset_y
+
     with mss.mss() as sct:
         image = np.array(
             sct.grab(
                 (
-                    reel_prompt_rect[0],
-                    reel_prompt_rect[1],
-                    reel_prompt_rect[0] + reel_prompt_rect[2],
-                    reel_prompt_rect[1] + reel_prompt_rect[3],
+                    offset_x + reel_prompt_rect[0],
+                    offset_y + reel_prompt_rect[1],
+                    offset_x + reel_prompt_rect[0] + reel_prompt_rect[2],
+                    offset_y + reel_prompt_rect[1] + reel_prompt_rect[3],
                 )
             )
         )
@@ -105,14 +100,16 @@ def is_reeling():
 
 
 def get_reel_state():
+    global offset_x, offset_y
+
     with mss.mss() as sct:
         image = np.array(
             sct.grab(
                 (
-                    reel_rect[0],
-                    reel_rect[1],
-                    reel_rect[0] + reel_rect[2],
-                    reel_rect[1] + reel_rect[3],
+                    offset_x + reel_rect[0],
+                    offset_y + reel_rect[1],
+                    offset_x + reel_rect[0] + reel_rect[2],
+                    offset_y + reel_rect[1] + reel_rect[3],
                 )
             )
         )
@@ -175,6 +172,27 @@ def toggle_auto_reel():
 
 
 def main():
+    if debug_mode:
+        with mss.mss() as sct:
+            monitor = sct.monitors[monitor_index]
+            monitor_image = np.array(sct.grab(monitor))
+
+            print("Selected monitor:", monitor)
+            print("All monitors:", sct.monitors)
+
+        from PIL import Image
+        Image.fromarray(monitor_image).save("full_preview.png")
+
+        return
+
+    with mss.mss() as sct:
+        monitor = sct.monitors[monitor_index]
+
+        global offset_x, offset_y
+
+        offset_x = monitor["left"]
+        offset_y = monitor["top"]
+
     keyboard.add_hotkey("ctrl+shift+c", toggle_auto_cast)
     keyboard.add_hotkey("ctrl+shift+f", toggle_auto_shake)
     keyboard.add_hotkey("ctrl+shift+r", toggle_auto_reel)
@@ -210,7 +228,8 @@ def main():
 
         if auto_cast and not failsafe_active:
             pydirectinput.moveTo(
-                int(reel_rect[0] + reel_rect[2] / 2), reel_rect[1] + reel_rect[3]
+                offset_x + reel_rect[0] + (reel_rect[2] // 2),
+                offset_y + reel_rect[1] + reel_rect[3]
             )
             time.sleep(0.02)
             pydirectinput.mouseDown(button="left")
@@ -311,8 +330,8 @@ def main():
                     error *= input_ratio
 
             pydirectinput.moveTo(
-                int(reel_rect[0] + reel_rect[2] * np.clip(target, 0, 1)),
-                int(reel_rect[1] + reel_rect[3] / 2),
+                offset_x + reel_rect[0] + int(reel_rect[2] * np.clip(target, 0, 1)),
+                offset_y + reel_rect[1] + (reel_rect[3] // 2),
             )
 
             if target < width / 2 or target > 1 - width / 2:
