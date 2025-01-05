@@ -181,6 +181,8 @@ def main():
             print("All monitors:", sct.monitors)
 
         from PIL import Image
+
+        monitor_image = cv2.cvtColor(monitor_image, cv2.COLOR_BGR2RGB)
         Image.fromarray(monitor_image).save("full_preview.png")
 
         return
@@ -202,7 +204,7 @@ def main():
     failsafe_active = False
     last_active_time = time.time()
 
-    print(f"Fisch bot is active")
+    print("Fisch bot is active")
 
     while True:
         # AFK fail safe
@@ -372,7 +374,7 @@ def main():
             failsafe_active = False
             last_active_time = time.time()
 
-    print(f"Fisch bot is inactive")
+    print("Fisch bot is inactive")
 
 
 if __name__ == "__main__":
