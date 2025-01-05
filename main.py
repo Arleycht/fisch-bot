@@ -11,10 +11,18 @@ import fisch
 
 # Hard coded areas to screenshot
 
+debug_mode = False
+
 monitor_index = 0
 reel_prompt_rect = (870, 790, 176, 16)
 reel_rect = (572, 876, 776, 31)
-debug_mode = False
+
+# Diameters that the shake button can appear as
+
+button_scales = [
+    121, # Default
+    203, # Steady rod
+]
 
 # Prepare template images
 
@@ -25,10 +33,6 @@ button_background = cv2.imread("base_button.png", cv2.IMREAD_UNCHANGED)
 button_text = cv2.imread("base_text.png", cv2.IMREAD_UNCHANGED)
 button_template = fisch.paste(button_background, button_text, background_alpha=0.6)
 button_template = cv2.cvtColor(np.array(button_template), cv2.COLOR_BGR2GRAY)
-button_scales = [
-    121, # Maximized window sizes
-    203,
-]
 
 fish_color = np.array((220, 26, 35))
 fish_color = np.multiply(fish_color, (0.5, 2.55, 2.55))
