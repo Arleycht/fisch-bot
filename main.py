@@ -13,10 +13,11 @@ import fisch
 
 debug_mode = False
 
-monitor_index = 0
+monitor_index = 1
 reel_prompt_rect = (720, 670, 480, 70)
 reel_rect = (435, 820, 1050, 84)
 edge_rect = (435, 814, 1050, 1)
+sample_coord = (432, 817)
 
 # Prepare template images
 
@@ -81,45 +82,29 @@ def get_rects(image):
     return np.array(contours)
 
 
-def get_target_pos(image):
-    # Create a normalized HSV image
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV).astype(np.float32)
-    composite = (hsv[:,:,0] / 180) * (hsv[:,:,1] / 255)
-
-    composite = cv2.GaussianBlur(composite, (7, 7), 0)
-    
-    composite -= composite.min()
-    composite /= composite.max()
-    
+def get_target_pos(image, target_color_hsv):
     kernel_size = 32
-    threshold_value = 0.5
-    
-    thresh = cv2.compare(composite, threshold_value, cv2.CMP_GT)
-    thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, np.ones((kernel_size, kernel_size)))
-    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, np.ones((kernel_size, kernel_size)))
-    rects = get_rects(thresh)
+    eps = (5, 10, 255)
 
-    # If there are too many rects, attempt to gather the target from the inverted composite
-    if len(rects) == 0 or rects[:,2].max() > thresh.shape[1] / 2 or len(rects) > 4:
-        composite_inv = 1 - composite
-        thresh_inv = cv2.compare(composite_inv, threshold_value, cv2.CMP_GT)
-        thresh_inv = cv2.morphologyEx(thresh_inv, cv2.MORPH_OPEN, np.ones((kernel_size, kernel_size)))
-        thresh_inv = cv2.morphologyEx(thresh_inv, cv2.MORPH_CLOSE, np.ones((kernel_size, kernel_size)))
-        rects_inv = get_rects(thresh_inv)
+    # Create a normalized HSV image
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-        # If it is an improvement, swap the images with their inversions
-        if len(rects_inv) < len(rects):
-            thresh = thresh_inv
-            rects = rects_inv
+    hsv = cv2.GaussianBlur(hsv, (13, 13), 0)
+    color_mask = cv2.inRange(hsv, target_color_hsv - eps, target_color_hsv + eps)
+    hsv = cv2.bitwise_and(hsv, hsv, mask=color_mask)
+    hsv = cv2.morphologyEx(hsv, cv2.MORPH_OPEN, np.ones((kernel_size, kernel_size)))
+    hsv = cv2.morphologyEx(hsv, cv2.MORPH_CLOSE, np.ones((kernel_size, kernel_size)))
 
-    # If no rects are found, default target position to the center
+    rects = get_rects(cv2.cvtColor(cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR), cv2.COLOR_BGR2GRAY))
+
     if len(rects) == 0:
         print("Failed to find target, defaulting to 0.5")
         return 0.5, 0.5
-    
-    # Take rect with maximum width as it is likely the target
-    rect = rects[rects[:,2].argmax()]
-    
+    elif len(rects) > 1:
+        rect = rects[rects[:,2].argmax()]
+    else:
+        rect = rects[0]
+
     # Normalize position and width
     (x, _, w, _) = rect
     pos = (x + w / 2) / reel_rect[2]
@@ -152,9 +137,22 @@ def get_state():
                 )
             )
         )
+
+        target_color = np.array(
+            sct.grab(
+                (
+                    offset_x + sample_coord[0],
+                    offset_y + sample_coord[1],
+                    offset_x + sample_coord[0] + 1,
+                    offset_y + sample_coord[1] + 1,
+                )
+            )
+        )
+
+        target_color = cv2.cvtColor(target_color, cv2.COLOR_BGR2HSV)[0,0]
     
     current_pos = get_current_pos(edge_image)
-    target_pos, target_width = get_target_pos(image)
+    target_pos, target_width = get_target_pos(image, target_color)
 
     return current_pos, target_pos, target_width
 
@@ -174,9 +172,6 @@ def toggle_auto_reel():
 
 def main():
     if debug_mode:
-        while not (get_is_window_focused() and is_digging()):
-            time.sleep(1)
-        
         with mss.mss() as sct:
             monitor = sct.monitors[monitor_index]
             monitor_image = np.array(sct.grab(monitor))
@@ -234,14 +229,12 @@ def main():
         last_dig_check_time = 0
         dt = 1 / 60
 
-        estimator = fisch.ReelStateEstimator()
         controller_gains = {
-            "default": (1, 0.1, 0.02),
-            "edge": (1, 0.1, 0),
+            "default": (1, 0.1, 0),
+            "close": (1, 0.1, 0.5),
+            "edge": (1, 0.1, 0.1),
         }
-        controller = fisch.Controller()
-
-        start_time = time.time()
+        controller = fisch.Controller(error_bounds=(-0.2, 0.2))
 
         is_holding = False
 
@@ -262,21 +255,7 @@ def main():
             position = np.clip(position, width / 2, 1 - width / 2)
             target = np.clip(target, (width * 0.9 / 2), 1 - (width * 0.9 / 2))
 
-            # Update kinematic metrics
-
-            estimator.update(position, target, is_holding, dt)
-
             error = target - position
-
-            # Acceleration compensation
-
-            if estimator.forces[0] > 0 and estimator.forces[1] > 0:
-                input_ratio = estimator.forces[1] / estimator.forces[0]
-
-                if error > 0:
-                    error /= input_ratio
-                elif error < 0:
-                    error *= input_ratio
 
             pydirectinput.moveTo(
                 offset_x + reel_rect[0] + int(reel_rect[2] * np.clip(target, 0, 1)),
@@ -285,6 +264,8 @@ def main():
 
             if target < width / 2 or target > 1 - width / 2:
                 controller.p, controller.d, controller.i = controller_gains["edge"]
+            elif error < width / 2:
+                controller.p, controller.d, controller.i = controller_gains["close"]
             else:
                 controller.p, controller.d, controller.i = controller_gains["default"]
 
@@ -304,9 +285,6 @@ def main():
         if was_digging:
             pydirectinput.mouseUp(button="left")
 
-        if not was_digging:
-            time.sleep(1)
-        else:
             if failsafe_active:
                 if was_digging:
                     s = "dig"
