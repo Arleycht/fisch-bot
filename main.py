@@ -1,4 +1,4 @@
-import cv2 as cv2
+import cv2
 import datetime
 import mss
 import keyboard
@@ -14,77 +14,26 @@ import fisch
 debug_mode = False
 
 monitor_index = 0
-reel_prompt_rect = (870, 790, 176, 16)
-reel_rect = (572, 876, 776, 31)
-
-# Diameters that the shake button can appear as
-
-button_scales = [
-    121, # Default
-    203, # Steady rod
-]
+reel_prompt_rect = (720, 670, 480, 70)
+reel_rect = (435, 820, 1050, 84)
+edge_rect = (435, 814, 1050, 1)
 
 # Prepare template images
 
 reel_prompt = cv2.imread("reel_prompt.png", cv2.IMREAD_UNCHANGED)
 reel_prompt = cv2.cvtColor(reel_prompt, cv2.COLOR_BGR2GRAY)
 
-button_background = cv2.imread("base_button.png", cv2.IMREAD_UNCHANGED)
-button_text = cv2.imread("base_text.png", cv2.IMREAD_UNCHANGED)
-button_template = fisch.paste(button_background, button_text, background_alpha=0.6)
-button_template = cv2.cvtColor(np.array(button_template), cv2.COLOR_BGR2GRAY)
-
-fish_color = np.array((220, 26, 35))
-fish_color = np.multiply(fish_color, (0.5, 2.55, 2.55))
-fish_color_epsilon = (1, 3, 3)
-lower_fish_color = fish_color - fish_color_epsilon
-upper_fish_color = fish_color + fish_color_epsilon
+reel_color = np.array((152, 152, 152))
 
 # Runtime variables
 
-auto_cast = False
-auto_shake = True
 auto_reel = True
 
 offset_x = 0
 offset_y = 0
 
 
-def process_sobel(image):
-    image = cv2.GaussianBlur(image, (3, 3), 0)
-    image = cv2.Sobel(
-        image,
-        cv2.CV_16S,
-        1,
-        1,
-        ksize=3,
-        scale=1,
-        delta=0,
-        borderType=cv2.BORDER_DEFAULT,
-    )
-    return cv2.convertScaleAbs(image)
-
-
-def get_shake_button_pos(image, threshold=0.45):
-    a = process_sobel(image)
-
-    for scale in button_scales:
-        b = cv2.resize(button_template, (scale, scale))
-        b = process_sobel(b)
-
-        matched = cv2.matchTemplate(a, b, cv2.TM_CCOEFF_NORMED, None, None)
-        _, max_value, _, max_location = cv2.minMaxLoc(matched)
-
-        if max_value > threshold:
-            top_left = np.array(max_location)
-            bottom_right = top_left + b.shape
-
-            return (top_left + bottom_right) // 2
-
-    return np.array((-1, 1))
-
-
-def is_reeling():
+def is_digging():
     global offset_x, offset_y
 
     with mss.mss() as sct:
@@ -108,7 +57,77 @@ def is_reeling():
     return max_value > 0.5
 
 
-def get_reel_state():
+def get_current_pos(image):
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    hsv = hsv[hsv.shape[0] // 2,:,:]
+    sat, val = hsv[:,1], hsv[:,2]
+    
+    mask = (sat == 0) & (val > 127)
+    mask = mask[np.newaxis,:].astype(np.uint8)
+    
+    (x, _, w, _) = cv2.boundingRect(mask)
+    pos = (x + w / 2) / reel_rect[2]
+    
+    return pos
+
+
+def get_rects(image):
+    contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = list(contours)
+    
+    for i, v in enumerate(contours):
+        contours[i] = cv2.boundingRect(v)
+
+    return np.array(contours)
+
+
+def get_target_pos(image):
+    # Create a normalized HSV image
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV).astype(np.float32)
+    composite = (hsv[:,:,0] / 180) * (hsv[:,:,1] / 255)
+
+    composite = cv2.GaussianBlur(composite, (7, 7), 0)
+    
+    composite -= composite.min()
+    composite /= composite.max()
+    
+    kernel_size = 32
+    threshold_value = 0.5
+    
+    thresh = cv2.compare(composite, threshold_value, cv2.CMP_GT)
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, np.ones((kernel_size, kernel_size)))
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, np.ones((kernel_size, kernel_size)))
+    rects = get_rects(thresh)
+
+    # If there are too many rects, attempt to gather the target from the inverted composite
+    if len(rects) == 0 or rects[:,2].max() > thresh.shape[1] / 2 or len(rects) > 4:
+        composite_inv = 1 - composite
+        thresh_inv = cv2.compare(composite_inv, threshold_value, cv2.CMP_GT)
+        thresh_inv = cv2.morphologyEx(thresh_inv, cv2.MORPH_OPEN, np.ones((kernel_size, kernel_size)))
+        thresh_inv = cv2.morphologyEx(thresh_inv, cv2.MORPH_CLOSE, np.ones((kernel_size, kernel_size)))
+        rects_inv = get_rects(thresh_inv)
+
+        # If it is an improvement, swap the images with their inversions
+        if len(rects_inv) < len(rects):
+            thresh = thresh_inv
+            rects = rects_inv
+
+    # If no rects are found, default target position to the center
+    if len(rects) == 0:
+        print("Failed to find target, defaulting to 0.5")
+        return 0.5, 0.5
+    
+    # Take rect with maximum width as it is likely the target
+    rect = rects[rects[:,2].argmax()]
+    
+    # Normalize position and width
+    (x, _, w, _) = rect
+    pos = (x + w / 2) / reel_rect[2]
+    
+    return pos, w / reel_rect[2]
+
+
+def get_state():
     global offset_x, offset_y
 
     with mss.mss() as sct:
@@ -123,38 +142,21 @@ def get_reel_state():
             )
         )
 
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        edge_image = np.array(
+            sct.grab(
+                (
+                    offset_x + edge_rect[0],
+                    offset_y + edge_rect[1],
+                    offset_x + edge_rect[0] + edge_rect[2],
+                    offset_y + edge_rect[1] + edge_rect[3],
+                )
+            )
+        )
+    
+    current_pos = get_current_pos(edge_image)
+    target_pos, target_width = get_target_pos(image)
 
-    kernel = np.ones((reel_rect[3] // 2, 3))
-    fish = cv2.inRange(hsv, lower_fish_color, upper_fish_color)
-    fish = cv2.morphologyEx(fish, cv2.MORPH_OPEN, kernel)
-    fish = cv2.morphologyEx(fish, cv2.MORPH_CLOSE, kernel)
-    fish_rect = cv2.boundingRect(fish)
-
-    _, s, v = cv2.split(hsv)
-
-    v = cv2.bitwise_and(v, cv2.bitwise_not(fish))
-    v_max = v.max().item()
-
-    current = cv2.inRange(v, v_max / 2, 255)
-
-    if v_max < 255:
-        composite = s.astype(np.uint16) * v
-        c_max = composite.max().item()
-        current &= cv2.inRange(composite, c_max / 2, c_max)
-
-    kernel = np.ones((reel_rect[3] // 2, fish_rect[2]))
-    current = cv2.morphologyEx(current, cv2.MORPH_CLOSE, kernel)
-    current = cv2.morphologyEx(current, cv2.MORPH_OPEN, kernel)
-    current_rect = cv2.boundingRect(current)
-
-    fish_position = fish_rect[0] + (fish_rect[2] / 2)
-    current_position = current_rect[0] + (current_rect[2] / 2)
-
-    fish_position /= reel_rect[2]
-    current_position /= reel_rect[2]
-
-    return current_position, current_rect[2] / reel_rect[2], fish_position
+    return current_pos, target_pos, target_width
 
 
 def get_is_window_focused():
@@ -165,16 +167,6 @@ def get_active_window_rect():
     return pywinctl.getActiveWindow().rect
 
 
-def toggle_auto_cast():
-    global auto_cast
-    auto_cast = not auto_cast
-
-
-def toggle_auto_shake():
-    global auto_shake
-    auto_shake = not auto_shake
-
-
 def toggle_auto_reel():
     global auto_reel
     auto_reel = not auto_reel
@@ -182,6 +174,9 @@ def toggle_auto_reel():
 
 def main():
     if debug_mode:
+        while not (get_is_window_focused() and is_digging()):
+            time.sleep(1)
+        
         with mss.mss() as sct:
             monitor = sct.monitors[monitor_index]
             monitor_image = np.array(sct.grab(monitor))
@@ -204,8 +199,6 @@ def main():
         offset_x = monitor["left"]
         offset_y = monitor["top"]
 
-    keyboard.add_hotkey("ctrl+shift+c", toggle_auto_cast)
-    keyboard.add_hotkey("ctrl+shift+f", toggle_auto_shake)
     keyboard.add_hotkey("ctrl+shift+r", toggle_auto_reel)
 
     pydirectinput.PAUSE = 0
@@ -213,7 +206,7 @@ def main():
     failsafe_active = False
     last_active_time = time.time()
 
-    print("Fisch bot is active")
+    print("Dig bot is active")
 
     while True:
         # AFK fail safe
@@ -221,12 +214,12 @@ def main():
         last_active_elapsed = time.time() - last_active_time
 
         if last_active_elapsed > 60 and not failsafe_active:
-            print("No shaking nor reeling detected in 1 minute")
+            print("No action detected in 1 minute")
             print(f"AFK fail safe activated at { datetime.datetime.now() }")
             failsafe_active = True
         elif last_active_elapsed > 60 * 10:
             print(
-                "Last successful shake or reel was over 10 minutes ago, breaking loop"
+                "Last successful action was over 10 minutes ago, breaking loop"
             )
             print(f"Current time { datetime.datetime.now() }")
             break
@@ -235,64 +228,16 @@ def main():
             time.sleep(1.5)
             continue
 
-        # Cast
+        # Dig
 
-        if auto_cast and not failsafe_active:
-            pydirectinput.moveTo(
-                offset_x + reel_rect[0] + (reel_rect[2] // 2),
-                offset_y + reel_rect[1] + reel_rect[3]
-            )
-            time.sleep(0.02)
-            pydirectinput.mouseDown(button="left")
-            time.sleep(np.random.uniform(0.25, 0.35))
-            pydirectinput.mouseUp(button="left")
-            time.sleep(2)
-
-        # Shake
-
-        was_shaking = False
-
-        while auto_shake and get_is_window_focused():
-            (x0, y0, x1, y1) = get_active_window_rect()
-
-            with mss.mss() as capture:
-                image = np.array(capture.grab((x0, y0, x1, y1)))
-
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            pos = get_shake_button_pos(image)
-
-            if pos[0] >= 0 and pos[1] >= 0:
-                was_shaking = True
-
-                pos += (int(x0 + button_template.shape[1] / 6), y0)
-
-                pydirectinput.moveTo(pos[0], pos[1] + 10)
-                time.sleep(0.02)
-                pydirectinput.moveTo(pos[0], pos[1])
-                time.sleep(0.08)
-                pydirectinput.click()
-                time.sleep(0.5)
-            else:
-                break
-
-        # Reel
-
-        if auto_cast or was_shaking:
-            # Wait for reeling minigame to start
-            for _ in range(4):
-                if is_reeling():
-                    break
-                else:
-                    time.sleep(0.5)
-
-        was_reeling = False
-        last_reel_check_time = 0
+        was_digging = False
+        last_dig_check_time = 0
         dt = 1 / 60
 
         estimator = fisch.ReelStateEstimator()
         controller_gains = {
-            "default": (1, 0.5, 0),
-            "edge": (1, 0, 0),
+            "default": (1, 0.1, 0.02),
+            "edge": (1, 0.1, 0),
         }
         controller = fisch.Controller()
 
@@ -303,14 +248,14 @@ def main():
         while auto_reel:
             now = time.time()
 
-            if now - last_reel_check_time > 0.1 or not get_is_window_focused():
-                if not is_reeling():
+            if now - last_dig_check_time > 0.1 or not get_is_window_focused():
+                if not is_digging():
                     break
 
-                was_reeling = True
-                last_reel_check_time = now
+                was_digging = True
+                last_dig_check_time = now
 
-            position, width, target = get_reel_state()
+            position, target, width = get_state()
 
             # Clip
 
@@ -320,13 +265,6 @@ def main():
             # Update kinematic metrics
 
             estimator.update(position, target, is_holding, dt)
-
-            # Initial compensation
-
-            alpha = (now - start_time) / 3
-
-            if alpha < 1:
-                target += (1 - alpha) * 0.025
 
             error = target - position
 
@@ -363,19 +301,15 @@ def main():
 
             time.sleep(dt)
 
-        if was_reeling:
+        if was_digging:
             pydirectinput.mouseUp(button="left")
 
-        if not (was_shaking or was_reeling):
+        if not was_digging:
             time.sleep(1)
         else:
             if failsafe_active:
-                if was_shaking and was_reeling:
-                    s = "shake and reel"
-                elif was_shaking:
-                    s = "shake"
-                else:
-                    s = "reel"
+                if was_digging:
+                    s = "dig"
 
                 print(f"AFK fail safe deactivated after successful { s }")
                 print(f"Current time { datetime.datetime.now() }")
@@ -383,7 +317,7 @@ def main():
             failsafe_active = False
             last_active_time = time.time()
 
-    print("Fisch bot is inactive")
+    print("Dig bot is inactive")
 
 
 if __name__ == "__main__":
