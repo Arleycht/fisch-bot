@@ -114,8 +114,8 @@ def get_target_pos(image, target_color_hsv):
     hsv = cv2.GaussianBlur(hsv, (13, 13), 0)
     color_mask = cv2.inRange(hsv, target_color_hsv - eps, target_color_hsv + eps)
     hsv = cv2.bitwise_and(hsv, hsv, mask=color_mask)
-    hsv = cv2.morphologyEx(hsv, cv2.MORPH_OPEN, np.ones((kernel_size, kernel_size)))
     hsv = cv2.morphologyEx(hsv, cv2.MORPH_CLOSE, np.ones((kernel_size, kernel_size)))
+    hsv = cv2.morphologyEx(hsv, cv2.MORPH_OPEN, np.ones((kernel_size, kernel_size)))
 
     rects = get_rects(
         cv2.cvtColor(cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR), cv2.COLOR_BGR2GRAY)
