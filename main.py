@@ -9,15 +9,30 @@ import pywinctl
 
 import kinematics
 
-# Hard coded areas to screenshot
+#################
+# Configuration #
+#################
 
 debug_mode = False
 
 monitor_index = 1
+
+# Rectangle to grab the minigame prompt from
 prompt_rect = (720, 670, 480, 70)
+
+# Rectangle to grab target position from
 reel_rect = (435, 820, 1050, 84)
+
+# Rectangle to grab current position from
 edge_rect = (435, 814, 1050, 1)
+
+# Coordinates to sample the target color from
 sample_coord = (432, 817)
+
+##########
+# Notice #
+##########
+# Everything beyond this is the image processing and control code
 
 # Prepare template images
 
