@@ -134,19 +134,29 @@ def get_target_pos(image, target_color_hsv):
 
 
 def get_state():
-    with mss.mss() as sct:
-        monitor = sct.monitors[monitor_index]
-        full_image = np.array(sct.grab(monitor))
+    reel_a = reel_rect[0:2]
+    reel_b = reel_rect[0:2] + reel_rect[2:4]
 
-    a = reel_rect[0:2]
-    b = reel_rect[0:2] + reel_rect[2:4]
-    reel_image = full_image[a[1] : b[1], a[0] : b[0]]
+    edge_a = edge_rect[0:2]
+    edge_b = edge_rect[0:2] + edge_rect[2:4]
 
-    a = edge_rect[0:2]
-    b = edge_rect[0:2] + edge_rect[2:4]
-    edge_image = full_image[a[1] : b[1], a[0] : b[0]]
+    sample = sample_coord
 
-    target_color = full_image[sample_coord[1], sample_coord[0], 0:3]
+    min_coord = np.min((reel_a, reel_b, sample), axis=0)
+    max_coord = np.max((reel_a, reel_b, sample), axis=0)
+
+    reel_a = reel_a - min_coord
+    reel_b = reel_b - min_coord
+    edge_a = edge_a - min_coord
+    edge_b = edge_b - min_coord
+    sample = sample - min_coord
+
+    image = grab_image(*min_coord, *max_coord)
+
+    reel_image = image[reel_a[1] : reel_b[1], reel_a[0] : reel_b[0]]
+    edge_image = image[edge_a[1] : edge_b[1], edge_a[0] : edge_b[0]]
+
+    target_color = image[sample[1], sample[0], 0:3]
     target_color = np.array(((target_color,),))
     target_color = cv2.cvtColor(target_color, cv2.COLOR_BGR2HSV)[0, 0]
 
