@@ -41,6 +41,11 @@ class Controller:
 
         self.prev_error = 0
         self.sum_error = 0
+    
+    def set_gains(self, p: float, i: float, d: float):
+        self.p = p
+        self.i = i
+        self.d = d
 
     def update(self, error: float, dt: float):
         self.sum_error += self.i * error * dt

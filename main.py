@@ -39,7 +39,12 @@ sample_coord = (432, 817)
 prompt_template = cv2.imread("reel_prompt.png", cv2.IMREAD_UNCHANGED)
 prompt_template = cv2.cvtColor(prompt_template, cv2.COLOR_BGR2GRAY)
 
-reel_color = np.array((152, 152, 152))
+# Convert configuration to NumPy arrays
+
+prompt_rect = np.array(prompt_rect)
+reel_rect = np.array(reel_rect)
+edge_rect = np.array(edge_rect)
+sample_coord = np.array(sample_coord)
 
 # Runtime variables
 
@@ -47,9 +52,11 @@ auto_strike = False
 auto_reel = True
 
 
-def grab_image(x: int, y: int, w: int, h: int, ignore_offset=False):
+def grab_image(x0: int, y0: int, x1: int, y1: int, ignore_offset=False):
+    global monitor_index
+
     with mss.mss() as sct:
-        coords = np.array((x, y, x + w, y + h))
+        coords = np.array((x0, y0, x1, y1))
 
         if not ignore_offset:
             monitor = sct.monitors[monitor_index]
@@ -63,7 +70,7 @@ def grab_image(x: int, y: int, w: int, h: int, ignore_offset=False):
 
 
 def is_control_minigame_active():
-    image = grab_image(*prompt_rect)
+    image = grab_image(*prompt_rect[0:2], *(prompt_rect[0:2] + prompt_rect[2:4]))
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     prompt_match = cv2.matchTemplate(
@@ -71,7 +78,7 @@ def is_control_minigame_active():
     )
     _, max_value, _, _ = cv2.minMaxLoc(prompt_match)
 
-    return max_value > 0.5
+    return max_value > 0.4
 
 
 def get_current_pos(image):
@@ -83,9 +90,8 @@ def get_current_pos(image):
     mask = mask[np.newaxis, :].astype(np.uint8)
 
     (x, _, w, _) = cv2.boundingRect(mask)
-    pos = (x + w / 2) / reel_rect[2]
 
-    return pos
+    return x + w / 2
 
 
 def get_rects(image):
@@ -99,8 +105,8 @@ def get_rects(image):
 
 
 def get_target_pos(image, target_color_hsv):
-    kernel_size = 32
-    eps = (5, 10, 255)
+    kernel_size = 40
+    eps = (5, 5, 200)
 
     # Create a normalized HSV image
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -123,23 +129,34 @@ def get_target_pos(image, target_color_hsv):
     else:
         rect = rects[0]
 
-    # Normalize position and width
     (x, _, w, _) = rect
-    pos = (x + w / 2) / reel_rect[2]
-
-    return pos, w / reel_rect[2]
+    pos = x + w / 2
+    return pos, w
 
 
 def get_state():
-    image = grab_image(*reel_rect)
-    edge_image = grab_image(*edge_rect)
-    target_color = grab_image(
-        sample_coord[0], sample_coord[1], sample_coord[0] + 1, sample_coord[1] + 1
-    )
+    with mss.mss() as sct:
+        monitor = sct.monitors[monitor_index]
+        full_image = np.array(sct.grab(monitor))
+
+    a = reel_rect[0:2]
+    b = reel_rect[0:2] + reel_rect[2:4]
+    reel_image = full_image[a[1] : b[1], a[0] : b[0]]
+
+    a = edge_rect[0:2]
+    b = edge_rect[0:2] + edge_rect[2:4]
+    edge_image = full_image[a[1] : b[1], a[0] : b[0]]
+
+    target_color = full_image[sample_coord[1], sample_coord[0], 0:3]
+    target_color = np.array(((target_color,),))
     target_color = cv2.cvtColor(target_color, cv2.COLOR_BGR2HSV)[0, 0]
 
     current_pos = get_current_pos(edge_image)
-    target_pos, target_width = get_target_pos(image, target_color)
+    target_pos, target_width = get_target_pos(reel_image, target_color)
+
+    current_pos /= reel_rect[2]
+    target_pos /= reel_rect[2]
+    target_width /= reel_rect[2]
 
     return current_pos, target_pos, target_width
 
@@ -209,66 +226,72 @@ def main():
         with mss.mss() as sct:
             monitor = sct.monitors[monitor_index]
             offset = (monitor["left"], monitor["top"])
-        
+
         # Strike
 
         if auto_strike and not failsafe_active:
             pydirectinput.moveTo(
                 offset[0] + reel_rect[0] + (reel_rect[2] // 2),
-                offset[1] + reel_rect[1] + reel_rect[3]
+                offset[1] + reel_rect[1] + (reel_rect[3] // 2),
             )
             time.sleep(0.02)
             pydirectinput.click()
-            time.sleep(0.5)
+            time.sleep(0.8)
 
         # Dig
 
         was_digging = False
         last_dig_check_time = 0
-        dt = 1 / 60
+        dt = 1 / 30
+
+        controller_gains = {
+            "default": (1, 0.2, 0),
+        }
 
         estimator = kinematics.KinematicEstimator()
-        controller_gains = {
-            "default": (1, 0.05, 0),
-            "close": (1, 0.025, 0),
-        }
         controller = kinematics.Controller()
+        controller.set_gains(*controller_gains["default"])
 
         is_holding = False
 
-        while auto_reel:
-            now = time.time()
+        last_time = time.perf_counter()
 
-            if now - last_dig_check_time > 0.1 or not is_window_focused():
+        while auto_reel:
+            now = time.perf_counter()
+
+            if now - last_dig_check_time > 0.25 or not is_window_focused():
                 if not is_control_minigame_active():
                     break
 
                 was_digging = True
                 last_dig_check_time = now
 
-            position, target, width = get_state()
+            dt = now - last_time
+            last_time = now
+
+            current_pos, target_pos, width = get_state()
 
             # Clip
 
-            position = np.clip(position, width / 2, 1 - width / 2)
-            target = np.clip(target, (width * 0.9 / 2), 1 - (width * 0.9 / 2))
+            current_pos = np.clip(current_pos, 0, 1)
+            target_pos = np.clip(target_pos, 0, 1)
 
-            error = target - position
-
-            # Update kinematic metrics
-
-            estimator.update(position, dt)
-            error -= (estimator.velocity * dt) + (estimator.acceleration * 0.5 * dt)
-
+            # Move mouse
             pydirectinput.moveTo(
-                offset[0] + reel_rect[0] + int(reel_rect[2] * np.clip(target, 0, 1)),
+                offset[0] + reel_rect[0] + int(reel_rect[2] * target_pos),
                 offset[1] + reel_rect[1] + (reel_rect[3] // 2),
             )
 
-            if error < width / 2:
-                controller.p, controller.d, controller.i = controller_gains["close"]
-            else:
-                controller.p, controller.d, controller.i = controller_gains["default"]
+            # Update kinematic metrics
+
+            estimator.update(current_pos, dt)
+            velocity = estimator.velocity
+
+            max_speed = 0.1
+            position_error = target_pos - current_pos
+            velocity_error = np.clip(position_error, -max_speed, max_speed) - velocity
+
+            error = velocity_error + position_error * 1.5
 
             control_value = controller.update(error, dt)
 
@@ -280,8 +303,6 @@ def main():
             else:
                 pydirectinput.mouseUp(button="left")
                 is_holding = False
-
-            time.sleep(dt)
 
         if was_digging:
             pydirectinput.mouseUp(button="left")
@@ -296,7 +317,7 @@ def main():
             failsafe_active = False
             last_active_time = time.time()
 
-            time.sleep(0.5)
+            time.sleep(2)
 
     print("Dig bot is inactive")
 
