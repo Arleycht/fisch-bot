@@ -257,6 +257,7 @@ def main():
 
         is_holding = False
         last_target_pos = 0.5
+        last_target_width = 0.5
 
         last_time = time.perf_counter()
 
@@ -273,12 +274,17 @@ def main():
             dt = now - last_time
             last_time = now
 
-            current_pos, target_pos, _ = get_state()
+            current_pos, target_pos, width = get_state()
 
             if target_pos is None:
                 target_pos = last_target_pos
             else:
                 last_target_pos = target_pos
+
+            if width is None:
+                width = last_target_width
+            else:
+                last_target_width = width
 
             # Clip
 
