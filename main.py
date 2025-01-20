@@ -122,8 +122,7 @@ def get_target_pos(image, target_color_hsv):
     )
 
     if len(rects) == 0:
-        print("Failed to find target, defaulting to 0.5")
-        return 0.5, 0.5
+        return None, None
     elif len(rects) > 1:
         rect = rects[rects[:, 2].argmax()]
     else:
@@ -155,8 +154,12 @@ def get_state():
     target_pos, target_width = get_target_pos(reel_image, target_color)
 
     current_pos /= reel_rect[2]
-    target_pos /= reel_rect[2]
-    target_width /= reel_rect[2]
+
+    if target_pos is not None:
+        target_pos /= reel_rect[2]
+
+    if target_width is not None:
+        target_width /= reel_rect[2]
 
     return current_pos, target_pos, target_width
 
@@ -253,6 +256,7 @@ def main():
         controller.set_gains(*controller_gains["default"])
 
         is_holding = False
+        last_target_pos = 0.5
 
         last_time = time.perf_counter()
 
@@ -269,7 +273,12 @@ def main():
             dt = now - last_time
             last_time = now
 
-            current_pos, target_pos, width = get_state()
+            current_pos, target_pos, _ = get_state()
+
+            if target_pos is None:
+                target_pos = last_target_pos
+            else:
+                last_target_pos = target_pos
 
             # Clip
 
