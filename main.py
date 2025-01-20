@@ -258,7 +258,7 @@ def main():
         dt = 1 / 30
 
         controller_gains = {
-            "default": (1, 0.2, 0),
+            "default": (1, 0.1, 0),
         }
 
         estimator = kinematics.KinematicEstimator()
@@ -312,11 +312,14 @@ def main():
             estimator.update(current_pos, dt)
             velocity = estimator.velocity
 
-            max_speed = 0.1
+            max_speed = 0.5
             position_error = target_pos - current_pos
-            velocity_error = np.clip(position_error, -max_speed, max_speed) - velocity
+            velocity_error = (
+                np.clip(position_error * 2, -max_speed, max_speed) - velocity
+            )
 
-            error = velocity_error + position_error * 1.5
+            error = velocity_error
+            error += np.clip(position_error, -width, width)
 
             control_value = controller.update(error, dt)
 
