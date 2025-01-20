@@ -2,10 +2,6 @@
 
 Automated digging script for the Roblox game Dig It using computer vision.
 
-## NOTICE
-
-This bot only automates the digging minigame and will not automatically start the dig at the moment.
-
 ## Setup and Usage
 
 It is recommended to use a Python virtual environment to run this script.
