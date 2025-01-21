@@ -284,6 +284,8 @@ def main():
             dt = now - last_time
             last_time = now
 
+            dt = max(dt, 1 / 60)
+
             current_pos, target_pos, width = get_state()
 
             if target_pos is None:
