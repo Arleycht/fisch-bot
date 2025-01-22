@@ -6,6 +6,7 @@ import numpy as np
 import pydirectinput
 import time
 import pywinctl
+from sys import exit
 
 import kinematics
 
@@ -13,21 +14,33 @@ import kinematics
 # Configuration #
 #################
 
-debug_mode = False
+presets = {
+    # Default settings
+    "1920x1080": {
+        # Rectangle to grab the minigame prompt from
+        "prompt_rect": (720, 670, 480, 70),
+        # Rectangle to grab target position from
+        "reel_rect": (435, 820, 1050, 84),
+        # Rectangle to grab current position from
+        "edge_rect": (435, 814, 1050, 1),
+        # Coordinates to sample the target color from
+        "sample_coord": (432, 817),
+    },
+    "2560x1440": {
+        "prompt_rect": (960, 920, 630, 70),
+        "reel_rect": (569, 1103, 1422, 112),
+        "edge_rect": (569, 1095, 1422, 1),
+        "sample_coord": (565, 1099),
+    },
+}
 
+# Set monitor index
 monitor_index = 1
 
-# Rectangle to grab the minigame prompt from
-prompt_rect = (720, 670, 480, 70)
+# Set preset to use
+preset = presets["1920x1080"]
 
-# Rectangle to grab target position from
-reel_rect = (435, 820, 1050, 84)
-
-# Rectangle to grab current position from
-edge_rect = (435, 814, 1050, 1)
-
-# Coordinates to sample the target color from
-sample_coord = (432, 817)
+debug_mode = False
 
 ##########
 # Notice #
@@ -36,15 +49,20 @@ sample_coord = (432, 817)
 
 # Prepare template images
 
-prompt_template = cv2.imread("reel_prompt.png", cv2.IMREAD_UNCHANGED)
-prompt_template = cv2.cvtColor(prompt_template, cv2.COLOR_BGR2GRAY)
+try:
+    reel_prompt_image_path = "reel_prompt.png"
+    prompt_template = cv2.imread(reel_prompt_image_path, cv2.IMREAD_UNCHANGED)
+    prompt_template = cv2.cvtColor(prompt_template, cv2.COLOR_BGR2GRAY)
+except cv2.error:
+    print(f'Failed to find image "{ reel_prompt_image_path }"')
+    exit()
 
 # Convert configuration to NumPy arrays
 
-prompt_rect = np.array(prompt_rect)
-reel_rect = np.array(reel_rect)
-edge_rect = np.array(edge_rect)
-sample_coord = np.array(sample_coord)
+prompt_rect = np.array(preset["prompt_rect"])
+reel_rect = np.array(preset["reel_rect"])
+edge_rect = np.array(preset["edge_rect"])
+sample_coord = np.array(preset["sample_coord"])
 
 # Runtime variables
 
