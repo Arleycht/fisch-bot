@@ -18,7 +18,7 @@ presets = {
     # Default settings
     "1920x1080": {
         # Rectangle to grab the minigame prompt from
-        "prompt_rect": (720, 670, 480, 70),
+        "prompt_rect": (724, 690, 466, 35),
         # Rectangle to grab target position from
         "reel_rect": (435, 820, 1050, 84),
         # Rectangle to grab current position from
@@ -96,7 +96,7 @@ def is_control_minigame_active():
     )
     _, max_value, _, _ = cv2.minMaxLoc(prompt_match)
 
-    return max_value > 0.4
+    return max_value > 0.45
 
 
 def get_current_pos(image):
@@ -276,14 +276,11 @@ def main():
         was_digging = False
         last_dig_check_time = 0
 
-        controller_gains = {
-            "default": (1, 0.15, 0.01),
-        }
         max_speed = 0.35
+        max_frequency = 60
 
         estimator = kinematics.KinematicEstimator()
-        controller = kinematics.Controller(error_bounds=max_speed / 3)
-        controller.set_gains(*controller_gains["default"])
+        controller = kinematics.Controller(1, 0.04, 0.015, error_bounds=max_speed / 4)
 
         is_holding = False
         last_click_time = 0
@@ -357,7 +354,7 @@ def main():
                 is_holding = False
                 last_click_time = now
 
-            time.sleep(max((1 / 60) - true_dt, 0))
+            time.sleep(max((1 / max_frequency) - true_dt, 0))
 
         if was_digging:
             pydirectinput.mouseUp(button="left")
