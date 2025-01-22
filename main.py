@@ -275,7 +275,6 @@ def main():
 
         was_digging = False
         last_dig_check_time = 0
-        dt = 1 / 30
 
         controller_gains = {
             "default": (1, 0.15, 0.01),
@@ -303,10 +302,9 @@ def main():
                 was_digging = True
                 last_dig_check_time = now
 
-            dt = now - last_time
+            true_dt = now - last_time
+            dt = max(true_dt, 1 / 60)
             last_time = now
-
-            dt = max(dt, 1 / 60)
 
             current_pos, target_pos, target_width = get_state()
 
@@ -359,7 +357,7 @@ def main():
                 is_holding = False
                 last_click_time = now
 
-            time.sleep(max((1 / 60) - dt, 0))
+            time.sleep(max((1 / 60) - true_dt, 0))
 
         if was_digging:
             pydirectinput.mouseUp(button="left")
