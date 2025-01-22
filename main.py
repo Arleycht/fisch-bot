@@ -111,9 +111,11 @@ def get_target_pos(image, target_color_hsv):
     # Create a normalized HSV image
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-    hsv = cv2.GaussianBlur(hsv, (13, 13), 0)
+    # Mask by color
     color_mask = cv2.inRange(hsv, target_color_hsv - eps, target_color_hsv + eps)
     hsv = cv2.bitwise_and(hsv, hsv, mask=color_mask)
+
+    # Remove artifacts
     hsv = cv2.morphologyEx(hsv, cv2.MORPH_CLOSE, np.ones((kernel_size, kernel_size)))
     hsv = cv2.morphologyEx(hsv, cv2.MORPH_OPEN, np.ones((kernel_size, kernel_size)))
 
@@ -258,11 +260,12 @@ def main():
         dt = 1 / 30
 
         controller_gains = {
-            "default": (1, 0.1, 0),
+            "default": (1, 0.15, 0.01),
         }
+        max_speed = 0.35
 
         estimator = kinematics.KinematicEstimator()
-        controller = kinematics.Controller()
+        controller = kinematics.Controller(error_bounds=max_speed / 3)
         controller.set_gains(*controller_gains["default"])
 
         is_holding = False
@@ -314,7 +317,6 @@ def main():
             estimator.update(current_pos, dt)
             velocity = estimator.velocity
 
-            max_speed = 0.5
             position_error = target_pos - current_pos
             velocity_error = (
                 np.clip(position_error * 2, -max_speed, max_speed) - velocity
@@ -349,7 +351,7 @@ def main():
             failsafe_active = False
             last_active_time = time.time()
 
-            time.sleep(2)
+            time.sleep(2.5)
 
     print("Dig bot is inactive")
 

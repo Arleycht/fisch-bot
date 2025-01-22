@@ -31,17 +31,23 @@ class KinematicEstimator:
 
 
 class Controller:
-    def __init__(self, p=1, d=0, i=0, clip_error=False, error_bounds=(0, 0)):
+    def __init__(
+        self, p=1, d=0, i=0, clip_error=False, error_bounds: tuple[int] | int = (0, 0)
+    ):
         self.p = p
         self.d = d
         self.i = i
 
         self.clip_error = clip_error
-        self.error_bounds = error_bounds
+
+        if error_bounds is tuple:
+            self.error_bounds = error_bounds
+        elif error_bounds is int:
+            self.error_bounds = (-np.abs(error_bounds), np.abs(error_bounds))
 
         self.prev_error = 0
         self.sum_error = 0
-    
+
     def set_gains(self, p: float, i: float, d: float):
         self.p = p
         self.i = i
