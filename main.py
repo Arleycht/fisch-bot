@@ -334,6 +334,8 @@ def main():
                 pydirectinput.mouseUp(button="left")
                 is_holding = False
 
+            time.sleep(max((1 / 60) - dt, 0))
+
         if was_digging:
             pydirectinput.mouseUp(button="left")
 
