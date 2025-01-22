@@ -269,6 +269,7 @@ def main():
         controller.set_gains(*controller_gains["default"])
 
         is_holding = False
+        last_click_time = 0
         last_target_pos = 0.5
         last_target_width = 0.5
 
@@ -289,17 +290,17 @@ def main():
 
             dt = max(dt, 1 / 60)
 
-            current_pos, target_pos, width = get_state()
+            current_pos, target_pos, target_width = get_state()
 
             if target_pos is None:
                 target_pos = last_target_pos
             else:
                 last_target_pos = target_pos
 
-            if width is None:
-                width = last_target_width
+            if target_width is None:
+                target_width = last_target_width
             else:
-                last_target_width = width
+                last_target_width = target_width
 
             # Clip
 
@@ -323,18 +324,22 @@ def main():
             )
 
             error = velocity_error
-            error += np.clip(position_error, -width, width)
+            error += np.clip(position_error, -target_width, target_width)
 
             control_value = controller.update(error, dt)
 
             if control_value > 0:
-                if not is_holding:
+                if not is_holding or (
+                    position_error > target_width / 2 and now - last_click_time > 0.25
+                ):
                     pydirectinput.mouseDown(button="left")
+                    last_click_time = now
 
                 is_holding = True
             else:
                 pydirectinput.mouseUp(button="left")
                 is_holding = False
+                last_click_time = now
 
             time.sleep(max((1 / 60) - dt, 0))
 
