@@ -120,6 +120,11 @@ def main():
     thread = threading.Thread(target=bot.run, daemon=True)
     thread.start()
 
+    def check_thread_status():
+        if not thread.is_alive():
+            ui_root.quit()
+
+    ui_root.after(100, check_thread_status)
     ui_root.mainloop()
 
     bot.stop()
