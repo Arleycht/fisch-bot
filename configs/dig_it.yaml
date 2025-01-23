@@ -1,0 +1,26 @@
+use_preset: 1920x1080
+
+presets:
+  1920x1080:
+    monitor_index: 1
+    prompt_image: templates/dig_it_prompt.png
+    prompt_rect: [724, 690, 466, 35]
+    reel_rect: [435, 820, 1050, 84]
+    edge_rect: [435, 814, 1050, 1]
+    sample_coord: [432, 817]
+
+  1920x1080_alt:
+    monitor_index: 1
+    prompt_image: templates/dig_it_prompt.png
+    prompt_rect: [724, 690, 466, 35]
+    reel_rect: [435, 820, 1050, 84]
+    edge_rect: [435, 814, 1050, 1]
+    sample_coord: [432, 817]
+
+  2560x1440:
+    monitor_index: 1
+    prompt_image: templates/dig_it_prompt.png
+    prompt_rect: [960, 920, 630, 70]
+    reel_rect: [569, 1103, 1422, 112]
+    edge_rect: [569, 1095, 1422, 1]
+    sample_coord: [565, 1099]

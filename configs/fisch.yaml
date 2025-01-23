@@ -1,0 +1,15 @@
+use_preset: 1920x1080
+
+presets:
+  1920x1080:
+    monitor_index: 1
+    prompt_image: templates/fisch_prompt.png
+    button_base_image: templates/base_button.png
+    button_text_image: templates/base_text.png
+    prompt_rect: [724, 690, 466, 35]
+    reel_rect: [572, 876, 776, 31]
+    button_scales: [
+      121, # Default
+      203, # Steady rod
+    ]
+    fish_color_hsv: [220, 26, 35],
