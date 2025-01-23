@@ -11,16 +11,22 @@ import bots
 
 ui_root = tk.Tk()
 
-auto_start_label = tk.Label(ui_root, text="Auto-start")
-auto_start_status_label = tk.Label(
-    ui_root, text="OFF", textvariable="auto_start_status"
-)
+ui_root.iconbitmap("main.ico")
+ui_root.configure(bg="black")
 
-auto_control_label = tk.Label(ui_root, text="Auto-control")
-auto_control_status_label = tk.Label(
-    ui_root, text="OFF", textvariable="auto_control_status"
-)
+photo_image = tk.PhotoImage(file="base_icon.png")
+image_label = tk.Label(ui_root, image=photo_image, bg="black")
 
+mode_label = tk.Label(ui_root, fg="#FFBB44", bg="black")
+
+auto_start_label = tk.Label(ui_root, text="Auto-start", fg="white", bg="black")
+auto_start_status_label = tk.Label(ui_root, text="OFF", fg="white", bg="black")
+
+auto_control_label = tk.Label(ui_root, text="Auto-control", fg="white", bg="black")
+auto_control_status_label = tk.Label(ui_root, text="OFF", fg="white", bg="black")
+
+image_label.pack()
+mode_label.pack()
 auto_start_label.pack()
 auto_start_status_label.pack()
 auto_control_label.pack()
@@ -29,8 +35,16 @@ auto_control_status_label.pack()
 
 def update_labels():
     global bot
-    ui_root.setvar("auto_start_status", "---[ON]" if bot.auto_start else "[OFF]---")
-    ui_root.setvar("auto_control_status", "---[ON]" if bot.auto_control else "[OFF]---")
+
+    if bot.auto_start:
+        auto_start_status_label.configure(text="---[ON]", fg="green")
+    else:
+        auto_start_status_label.configure(text="[OFF]---", fg="red")
+
+    if bot.auto_control:
+        auto_control_status_label.configure(text="---[ON]", fg="green")
+    else:
+        auto_control_status_label.configure(text="[OFF]---", fg="red")
 
 
 def toggle_auto_start():
@@ -102,6 +116,8 @@ def main():
             exit()
 
         bot = bots.Fisch(config)
+
+        mode_label.configure(text="Fisch mode")
     elif args.mode == "dig-it":
         try:
             config = bots.DigItConfig()
@@ -111,6 +127,8 @@ def main():
             exit()
 
         bot = bots.DigIt(config)
+
+        mode_label.configure(text="Dig It mode")
 
     update_labels()
 
