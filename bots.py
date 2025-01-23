@@ -74,7 +74,6 @@ class Fisch(Bot):
         template = util.paste(button_background, button_text, background_alpha=0.6)
 
         self.button_template = cv2.cvtColor(np.array(template), cv2.COLOR_BGR2GRAY)
-        self.offset = np.array((0, 0))
 
     def process_sobel(self, image):
         image = cv2.GaussianBlur(image, (3, 3), 0)
@@ -195,17 +194,18 @@ class Fisch(Bot):
                 time.sleep(1.5)
                 continue
 
+            with mss.mss() as sct:
+                monitor = sct.monitors[self.config.monitor_index]
+                offset = (monitor["left"], monitor["top"])
+
             # Cast
 
             if self.auto_start and not self.failsafe_active:
-                pydirectinput.moveTo(
-                    self.offset[0]
-                    + self.config.reel_rect[0]
-                    + (self.config.reel_rect[2] // 2),
-                    self.offset[1]
-                    + self.config.reel_rect[1]
-                    + self.config.reel_rect[3],
-                )
+                pos = offset + self.config.reel_rect[0:2]
+                pos[0] += self.config.reel_rect[2] // 2
+                pos[1] += self.config.reel_rect[3]
+
+                pydirectinput.moveTo(*pos)
                 time.sleep(0.02)
                 pydirectinput.mouseDown(button="left")
                 time.sleep(np.random.uniform(0.25, 0.35))
@@ -304,14 +304,10 @@ class Fisch(Bot):
                     elif error < 0:
                         error *= input_ratio
 
-                pydirectinput.moveTo(
-                    self.offset[0]
-                    + self.config.reel_rect[0]
-                    + int(self.config.reel_rect[2] * np.clip(target, 0, 1)),
-                    self.offset[1]
-                    + self.config.reel_rect[1]
-                    + (self.config.reel_rect[3] // 2),
-                )
+                pos = offset + self.config.reel_rect[0:2]
+                pos[0] += int(self.config.reel_rect[2] * np.clip(target, 0, 1))
+                pos[1] += self.config.reel_rect[3] // 2
+                pydirectinput.moveTo(*pos)
 
                 if target < width / 2 or target > 1 - width / 2:
                     controller.p, controller.d, controller.i = controller_gains["edge"]
