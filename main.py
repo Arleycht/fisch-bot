@@ -5,24 +5,44 @@ import keyboard
 import numpy as np
 from sys import exit
 import threading
+import tkinter as tk
 
 import bots
 
+ui_root = tk.Tk()
+
+auto_start_label = tk.Label(ui_root, text="Auto-start")
+auto_start_status_label = tk.Label(
+    ui_root, text="OFF", textvariable="auto_start_status"
+)
+
+auto_control_label = tk.Label(ui_root, text="Auto-control")
+auto_control_status_label = tk.Label(
+    ui_root, text="OFF", textvariable="auto_control_status"
+)
+
+auto_start_label.pack()
+auto_start_status_label.pack()
+auto_control_label.pack()
+auto_control_status_label.pack()
 
 
-
-
-
+def update_labels():
+    global bot
+    ui_root.setvar("auto_start_status", "---[ON]" if bot.auto_start else "[OFF]---")
+    ui_root.setvar("auto_control_status", "---[ON]" if bot.auto_control else "[OFF]---")
 
 
 def toggle_auto_start():
     global bot
     bot.auto_start = not bot.auto_start
+    update_labels()
 
 
 def toggle_auto_control():
     global bot
     bot.auto_control = not bot.auto_control
+    update_labels()
 
 
 def stop_bot():
@@ -85,6 +105,7 @@ def main():
 
         bot = bots.DigIt(config)
 
+    update_labels()
 
     keyboard.add_hotkey("ctrl+shift+c", toggle_auto_start)
     keyboard.add_hotkey("ctrl+shift+r", toggle_auto_control)
@@ -92,6 +113,7 @@ def main():
     thread = threading.Thread(target=bot.run, daemon=True)
     thread.start()
 
+    ui_root.mainloop()
 
     bot.stop()
     thread.join()
