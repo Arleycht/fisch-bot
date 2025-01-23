@@ -172,6 +172,8 @@ class Fisch(Bot):
         )
 
     def run(self):
+        print("Fisch bot is active")
+
         pydirectinput.PAUSE = 0
 
         while self.is_running:
