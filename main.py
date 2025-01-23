@@ -94,7 +94,14 @@ def main():
         exit()
 
     if args.mode == "fisch":
-        raise NotImplementedError()
+        try:
+            config = bots.FischConfig()
+            config.load("configs/fisch.yaml")
+        except Exception as e:
+            print(f"Failed to load config: { e }")
+            exit()
+
+        bot = bots.Fisch(config)
     elif args.mode == "dig-it":
         try:
             config = bots.DigItConfig()

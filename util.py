@@ -1,7 +1,35 @@
 import cv2
 import mss
 import numpy as np
+from PIL import Image
 import pywinctl
+
+
+def paste(
+    background: np.ndarray,
+    foreground: np.ndarray,
+    position=(0, 0),
+    background_alpha=1,
+    foreground_alpha=1,
+):
+    background = Image.fromarray(background)
+    foreground = Image.fromarray(foreground)
+
+    alpha = background.split()[3]
+    alpha = alpha.point(lambda x: x * background_alpha)
+    background.putalpha(alpha)
+
+    alpha = foreground.split()[3]
+    alpha = alpha.point(lambda x: x * foreground_alpha)
+    foreground.putalpha(alpha)
+
+    background.paste(foreground, position, foreground)
+
+    return background
+
+
+def get_active_window_rect():
+    return pywinctl.getActiveWindow().rect
 
 
 def grab_image(x0: int, y0: int, x1: int, y1: int, monitor_index=1):

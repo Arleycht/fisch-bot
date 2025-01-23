@@ -24,6 +24,338 @@ class Bot:
         self.is_running = False
 
 
+class FischConfig:
+    def __init__(self):
+        self.prompt_rect = np.array((0, 0, 0, 0))
+        self.reel_rect = np.array((0, 0, 0, 0))
+
+        self.monitor_index = 1
+        self.prompt_template = None
+
+    def load(self, path):
+        with open(path, "r") as f:
+            config = yaml.safe_load(f)
+
+        use_preset = config["use_preset"]
+        preset = config["presets"][use_preset]
+
+        try:
+            reel_prompt_image_path = preset["prompt_image"]
+            self.prompt_template = cv2.imread(
+                reel_prompt_image_path, cv2.IMREAD_UNCHANGED
+            )
+            self.prompt_template = cv2.cvtColor(
+                self.prompt_template, cv2.COLOR_BGR2GRAY
+            )
+        except cv2.error:
+            print(f'Failed to find image "{ reel_prompt_image_path }"')
+            exit()
+
+        def load_as_array(k):
+            return np.array(preset[k]).astype(np.int64)
+
+        self.monitor_index = preset["monitor_index"]
+        self.button_base_path = preset["button_base_image"]
+        self.button_text_path = preset["button_text_image"]
+        self.prompt_rect = load_as_array("prompt_rect")
+        self.reel_rect = load_as_array("reel_rect")
+        self.button_scales = load_as_array("button_scales")
+        self.fish_color_hsv = load_as_array("fish_color_hsv")
+
+
+class Fisch(Bot):
+    def __init__(self, config: FischConfig):
+        super().__init__()
+
+        self.config = config
+
+        button_background = cv2.imread(config.button_base_path, cv2.IMREAD_UNCHANGED)
+        button_text = cv2.imread(config.button_text_path, cv2.IMREAD_UNCHANGED)
+        template = util.paste(button_background, button_text, background_alpha=0.6)
+
+        self.button_template = cv2.cvtColor(np.array(template), cv2.COLOR_BGR2GRAY)
+        self.offset = np.array((0, 0))
+
+    def process_sobel(self, image):
+        image = cv2.GaussianBlur(image, (3, 3), 0)
+        image = cv2.Sobel(
+            image,
+            cv2.CV_16S,
+            1,
+            1,
+            ksize=3,
+            scale=1,
+            delta=0,
+            borderType=cv2.BORDER_DEFAULT,
+        )
+        return cv2.convertScaleAbs(image)
+
+    def get_shake_button_pos(self, image, threshold=0.45):
+        a = self.process_sobel(image)
+
+        for scale in self.config.button_scales:
+            b = cv2.resize(self.button_template, (scale, scale))
+            b = self.process_sobel(b)
+
+            matched = cv2.matchTemplate(a, b, cv2.TM_CCOEFF_NORMED, None, None)
+            _, max_value, _, max_location = cv2.minMaxLoc(matched)
+
+            if max_value > threshold:
+                top_left = np.array(max_location)
+                bottom_right = top_left + b.shape
+
+                return (top_left + bottom_right) // 2
+
+        return np.array((-1, 1))
+
+    def is_control_minigame_active(self):
+        image = util.grab_image(
+            *self.config.prompt_rect[0:2],
+            *(self.config.prompt_rect[0:2] + self.config.prompt_rect[2:4]),
+            self.config.monitor_index,
+        )
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        prompt_match = cv2.matchTemplate(
+            image, self.config.prompt_template, cv2.TM_CCOEFF_NORMED, None, None
+        )
+        _, max_value, _, _ = cv2.minMaxLoc(prompt_match)
+
+        return max_value > 0.5
+
+    def get_state(self):
+        image = util.grab_image(
+            *self.config.reel_rect[0:2],
+            *(self.config.reel_rect[0:2] + self.config.reel_rect[2:4]),
+            self.config.monitor_index,
+        )
+
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        fish_color_epsilon = (1, 3, 3)
+        fish_color = np.multiply(self.config.fish_color_hsv, (0.5, 2.55, 2.55))
+        lower_fish_color = fish_color - fish_color_epsilon
+        upper_fish_color = fish_color + fish_color_epsilon
+
+        kernel = np.ones((self.config.reel_rect[3] // 2, 3))
+        fish = cv2.inRange(hsv, lower_fish_color, upper_fish_color)
+        fish = cv2.morphologyEx(fish, cv2.MORPH_OPEN, kernel)
+        fish = cv2.morphologyEx(fish, cv2.MORPH_CLOSE, kernel)
+        fish_rect = cv2.boundingRect(fish)
+
+        _, s, v = cv2.split(hsv)
+
+        v = cv2.bitwise_and(v, cv2.bitwise_not(fish))
+        v_max = v.max().item()
+
+        current = cv2.inRange(v, v_max / 2, 255)
+
+        if v_max < 255:
+            composite = s.astype(np.uint16) * v
+            c_max = composite.max().item()
+            current &= cv2.inRange(composite, c_max / 2, c_max)
+
+        kernel = np.ones((self.config.reel_rect[3] // 2, fish_rect[2]))
+        current = cv2.morphologyEx(current, cv2.MORPH_CLOSE, kernel)
+        current = cv2.morphologyEx(current, cv2.MORPH_OPEN, kernel)
+        current_rect = cv2.boundingRect(current)
+
+        fish_position = fish_rect[0] + (fish_rect[2] / 2)
+        current_position = current_rect[0] + (current_rect[2] / 2)
+
+        fish_position /= self.config.reel_rect[2]
+        current_position /= self.config.reel_rect[2]
+
+        return (
+            current_position,
+            current_rect[2] / self.config.reel_rect[2],
+            fish_position,
+        )
+
+    def run(self):
+        pydirectinput.PAUSE = 0
+
+        while self.is_running:
+            # AFK fail safe
+
+            last_active_elapsed = time.time() - self.last_active_time
+
+            if last_active_elapsed > 60 and not self.failsafe_active:
+                print("No shaking nor reeling detected in 1 minute")
+                print(f"AFK fail safe activated at { datetime.datetime.now() }")
+                self.failsafe_active = True
+            elif last_active_elapsed > 60 * 10:
+                print(
+                    "Last successful shake or reel was over 10 minutes ago, breaking loop"
+                )
+                print(f"Current time { datetime.datetime.now() }")
+                break
+
+            if not util.is_window_focused():
+                time.sleep(1.5)
+                continue
+
+            # Cast
+
+            if self.auto_start and not self.failsafe_active:
+                pydirectinput.moveTo(
+                    self.offset[0]
+                    + self.config.reel_rect[0]
+                    + (self.config.reel_rect[2] // 2),
+                    self.offset[1]
+                    + self.config.reel_rect[1]
+                    + self.config.reel_rect[3],
+                )
+                time.sleep(0.02)
+                pydirectinput.mouseDown(button="left")
+                time.sleep(np.random.uniform(0.25, 0.35))
+                pydirectinput.mouseUp(button="left")
+                time.sleep(2)
+
+            # Shake
+
+            was_shaking = False
+
+            while util.is_window_focused():
+                (x0, y0, x1, y1) = util.get_active_window_rect()
+
+                with mss.mss() as capture:
+                    image = np.array(capture.grab((x0, y0, x1, y1)))
+
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                pos = self.get_shake_button_pos(image)
+
+                if pos[0] >= 0 and pos[1] >= 0:
+                    was_shaking = True
+
+                    pos += (int(x0 + self.button_template.shape[1] / 6), y0)
+
+                    pydirectinput.moveTo(pos[0], pos[1] + 10)
+                    time.sleep(0.02)
+                    pydirectinput.moveTo(pos[0], pos[1])
+                    time.sleep(0.08)
+                    pydirectinput.click()
+                    time.sleep(0.5)
+                else:
+                    break
+
+            # Reel
+
+            if self.auto_start or was_shaking:
+                # Wait for reeling minigame to start
+                for _ in range(4):
+                    if self.is_control_minigame_active():
+                        break
+                    else:
+                        time.sleep(0.5)
+
+            was_reeling = False
+            last_reel_check_time = 0
+            dt = 1 / 60
+
+            estimator = kinematics.ReelStateEstimator()
+            controller_gains = {
+                "default": (1, 0.5, 0),
+                "edge": (1, 0, 0),
+            }
+            controller = kinematics.Controller()
+
+            start_time = time.time()
+
+            is_holding = False
+
+            while self.auto_control:
+                now = time.time()
+
+                if now - last_reel_check_time > 0.1 or not util.is_window_focused():
+                    if not self.is_control_minigame_active():
+                        break
+
+                    was_reeling = True
+                    last_reel_check_time = now
+
+                position, width, target = self.get_state()
+
+                # Clip
+
+                position = np.clip(position, width / 2, 1 - width / 2)
+                target = np.clip(target, (width * 0.9 / 2), 1 - (width * 0.9 / 2))
+
+                # Update kinematic metrics
+
+                estimator.update(position, target, is_holding, dt)
+
+                # Initial compensation
+
+                alpha = (now - start_time) / 3
+
+                if alpha < 1:
+                    target += (1 - alpha) * 0.025
+
+                error = target - position
+
+                # Acceleration compensation
+
+                if estimator.forces[0] > 0 and estimator.forces[1] > 0:
+                    input_ratio = estimator.forces[1] / estimator.forces[0]
+
+                    if error > 0:
+                        error /= input_ratio
+                    elif error < 0:
+                        error *= input_ratio
+
+                pydirectinput.moveTo(
+                    self.offset[0]
+                    + self.config.reel_rect[0]
+                    + int(self.config.reel_rect[2] * np.clip(target, 0, 1)),
+                    self.offset[1]
+                    + self.config.reel_rect[1]
+                    + (self.config.reel_rect[3] // 2),
+                )
+
+                if target < width / 2 or target > 1 - width / 2:
+                    controller.p, controller.d, controller.i = controller_gains["edge"]
+                else:
+                    controller.p, controller.d, controller.i = controller_gains[
+                        "default"
+                    ]
+
+                control_value = controller.update(error, dt)
+
+                if control_value > 0:
+                    if not is_holding:
+                        pydirectinput.mouseDown(button="left")
+
+                    is_holding = True
+                else:
+                    pydirectinput.mouseUp(button="left")
+                    is_holding = False
+
+                time.sleep(dt)
+
+            if was_reeling:
+                pydirectinput.mouseUp(button="left")
+
+            if not (was_shaking or was_reeling):
+                time.sleep(1)
+            else:
+                if self.failsafe_active:
+                    if was_shaking and was_reeling:
+                        s = "shake and reel"
+                    elif was_shaking:
+                        s = "shake"
+                    else:
+                        s = "reel"
+
+                    print(f"AFK fail safe deactivated after successful { s }")
+                    print(f"Current time { datetime.datetime.now() }")
+
+                self.failsafe_active = False
+                self.last_active_time = time.time()
+
+        print("Fisch bot is inactive")
+
+
 class DigItConfig:
     def __init__(self):
         self.prompt_rect = np.array((0, 0, 0, 0))
@@ -72,6 +404,7 @@ class DigIt(Bot):
         image = util.grab_image(
             *self.config.prompt_rect[0:2],
             *(self.config.prompt_rect[0:2] + self.config.prompt_rect[2:4]),
+            self.config.monitor_index,
         )
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -329,4 +662,4 @@ class DigIt(Bot):
 
                 time.sleep(2.5)
 
-        print("Exiting bot")
+        print("Dig bot is inactive")

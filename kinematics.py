@@ -70,3 +70,37 @@ class Controller:
         self.prev_error = error
 
         return result
+
+
+class ReelStateEstimator:
+    def __init__(self):
+        self.reel = KinematicEstimator(window_len=6)
+        self.fish = KinematicEstimator(window_len=4)
+
+        self.forces = [0, 0]
+        self.current_time = 0
+        self.last_measure_time = 0
+        self.measure_state = False
+
+    def update(
+        self, reel_position: float, fish_position: float, is_holding: bool, dt: float
+    ):
+        self.reel.update(reel_position, dt)
+        self.fish.update(fish_position, dt)
+
+        elapsed = self.current_time - self.last_measure_time
+
+        if self.measure_state == is_holding:
+            if elapsed >= 8 * dt:
+                if self.reel.acceleration != 0:
+                    if is_holding and self.reel.acceleration >= 0:
+                        self.forces[1] = abs(self.reel.acceleration)
+                    elif self.reel.acceleration <= 0:
+                        self.forces[0] = abs(self.reel.acceleration)
+
+                self.last_measure_time = self.current_time
+        else:
+            self.measure_state = is_holding
+            self.last_measure_time = self.current_time
+
+        self.current_time += dt
