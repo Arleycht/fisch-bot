@@ -216,7 +216,7 @@ class Fisch(Bot):
 
             was_shaking = False
 
-            while util.is_window_focused():
+            while self.auto_control and util.is_window_focused():
                 (x0, y0, x1, y1) = util.get_active_window_rect()
 
                 with mss.mss() as capture:
