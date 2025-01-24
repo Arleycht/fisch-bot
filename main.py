@@ -18,7 +18,7 @@ default_image = tk.PhotoImage(file="base_icon.png")
 failsafe_image = tk.PhotoImage(file="sleeping_icon.png")
 image_label = tk.Label(ui_root, image=default_image, bg="black")
 
-mode_label = tk.Label(ui_root, fg="#FFBB44", bg="black")
+mode_label = tk.Label(ui_root, fg="#FFBB44", bg="black", font=(None, 16))
 
 auto_start_label = tk.Label(ui_root, text="Auto-start", fg="white", bg="black")
 auto_start_status_label = tk.Label(ui_root, text="OFF", fg="white", bg="black")
@@ -119,7 +119,7 @@ def main():
             exit()
 
         bot = bots.Fisch(config)
-        mode_label.configure(text="Fisch mode")
+        mode_label.configure(text="Fisch Mode")
     elif args.mode == "dig-it":
         try:
             config = bots.DigItConfig()
@@ -129,7 +129,9 @@ def main():
             exit()
 
         bot = bots.DigIt(config)
-        mode_label.configure(text="Dig It mode")
+        mode_label.configure(text="Dig It Mode")
+    else:
+        raise ValueError("Unknown mode")
 
     update_labels()
 
