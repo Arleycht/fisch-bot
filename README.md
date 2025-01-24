@@ -2,7 +2,11 @@
 
 A modular bot for automating Fisch-like games using computer vision.
 
-Also known as a fisch macro, fisch bot, fisch script.
+Also known as a Fisch macro, Fisch bot, Fisch script, Dig It macro, Dig It bot, Dig It script.
+
+Compatible with:
+- Fisch
+- Dig It
 
 ## Setup and Usage
 
