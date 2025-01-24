@@ -61,6 +61,7 @@ def toggle_auto_control():
 
 def stop_bot():
     global bot
+    ui_root.quit()
     bot.stop()
 
 
@@ -116,7 +117,6 @@ def main():
             exit()
 
         bot = bots.Fisch(config)
-
         mode_label.configure(text="Fisch mode")
     elif args.mode == "dig-it":
         try:
@@ -127,7 +127,6 @@ def main():
             exit()
 
         bot = bots.DigIt(config)
-
         mode_label.configure(text="Dig It mode")
 
     update_labels()
@@ -135,18 +134,13 @@ def main():
     keyboard.add_hotkey("ctrl+shift+c", toggle_auto_start)
     keyboard.add_hotkey("ctrl+shift+r", toggle_auto_control)
 
+    ui_root.bind("<Control-w>", lambda _: stop_bot())
+
     thread = threading.Thread(target=bot.run, daemon=True)
     thread.start()
 
-    def check_thread_status():
-        if not thread.is_alive():
-            ui_root.quit()
-
-    ui_root.after(100, check_thread_status)
+    ui_root.after(100, lambda: None if thread.is_alive() else stop_bot())
     ui_root.mainloop()
-
-    bot.stop()
-    thread.join()
 
 
 if __name__ == "__main__":
