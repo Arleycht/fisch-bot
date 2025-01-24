@@ -141,6 +141,8 @@ def main():
         while thread.is_alive():
             if bot.failsafe_active:
                 image_label.configure(image=failsafe_image)
+            else:
+                image_label.configure(image=default_image)
 
             time.sleep(1)
         ui_root.quit()
