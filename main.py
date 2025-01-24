@@ -1,10 +1,10 @@
 import argparse
 import cv2
-import mss
 import keyboard
+import mss
 import numpy as np
-from sys import exit
 import threading
+import time
 import tkinter as tk
 
 import bots
@@ -14,8 +14,9 @@ ui_root = tk.Tk()
 ui_root.iconbitmap("main.ico")
 ui_root.configure(bg="black")
 
-photo_image = tk.PhotoImage(file="base_icon.png")
-image_label = tk.Label(ui_root, image=photo_image, bg="black")
+default_image = tk.PhotoImage(file="base_icon.png")
+failsafe_image = tk.PhotoImage(file="sleeping_icon.png")
+image_label = tk.Label(ui_root, image=default_image, bg="black")
 
 mode_label = tk.Label(ui_root, fg="#FFBB44", bg="black")
 
@@ -25,12 +26,6 @@ auto_start_status_label = tk.Label(ui_root, text="OFF", fg="white", bg="black")
 auto_control_label = tk.Label(ui_root, text="Auto-control", fg="white", bg="black")
 auto_control_status_label = tk.Label(ui_root, text="OFF", fg="white", bg="black")
 
-image_label.pack()
-mode_label.pack()
-auto_start_label.pack()
-auto_start_status_label.pack()
-auto_control_label.pack()
-auto_control_status_label.pack()
 
 
 def update_labels():
@@ -66,6 +61,13 @@ def stop_bot():
 
 
 def main():
+    image_label.pack()
+    mode_label.pack()
+    auto_start_label.pack()
+    auto_start_status_label.pack()
+    auto_control_label.pack()
+    auto_control_status_label.pack()
+
     global bot
 
     parser = argparse.ArgumentParser()
@@ -139,7 +141,17 @@ def main():
     thread = threading.Thread(target=bot.run, daemon=True)
     thread.start()
 
-    ui_root.after(100, lambda: None if thread.is_alive() else stop_bot())
+    def check_thread_status():
+        while thread.is_alive():
+            if bot.failsafe_active:
+                image_label.configure(image=failsafe_image)
+
+            time.sleep(1)
+        ui_root.quit()
+
+    status_thread = threading.Thread(target=check_thread_status, daemon=True)
+    status_thread.start()
+
     ui_root.mainloop()
 
 
