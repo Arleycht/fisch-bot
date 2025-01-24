@@ -11,7 +11,7 @@ def paste(
     position=(0, 0),
     background_alpha=1,
     foreground_alpha=1,
-):
+) -> Image.Image:
     background = Image.fromarray(background)
     foreground = Image.fromarray(foreground)
 
