@@ -3,6 +3,7 @@ import cv2
 import datetime
 import mss
 import numpy as np
+import threading
 import time
 import pydirectinput
 import yaml
@@ -49,7 +50,8 @@ class Bot:
         self.auto_start = False
         self.auto_control = True
 
-        self.is_running = True
+        self._thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
 
     def reset_active_timer(self):
         self.last_active_time = time.time()
@@ -72,7 +74,7 @@ class Bot:
             print("Last successful activity was over 10 minutes ago, stopping the bot")
             print(f"Current time { datetime.datetime.now() }")
 
-            self.is_running = False
+            self.stop()
 
     def toggle_auto_start(self):
         self.auto_start = not self.auto_start
@@ -80,16 +82,41 @@ class Bot:
     def toggle_auto_control(self):
         self.auto_control = not self.auto_control
 
+    def is_alive(self):
+        if self._thread is not None:
+            return self._thread.is_alive()
+        return False
+
+    def run(self):
+        self.stop()
+        self.reset_active_timer()
+        self._thread = threading.Thread(target=self.mainloop, daemon=True)
+        self._thread.start()
+
+    def mainloop(self):
+        raise NotImplementedError()
+
     def stop(self):
-        self.is_running = False
+        while self._stop_event.is_set():
+            time.sleep(0.1)
+
+        self._stop_event.set()
+
+        if self._thread:
+            self._thread.join()
+
+        self._stop_event.clear()
 
 
 class FischConfig(BotConfig):
-    def __init__(self):
+    def __init__(self, path: str | None):
         super().__init__()
 
         self.prompt_rect = np.array((0, 0, 0, 0))
         self.reel_rect = np.array((0, 0, 0, 0))
+
+        if path is not None:
+            self.load(path)
 
     def load(self, path):
         preset = super()._load(path)
@@ -109,7 +136,7 @@ class FischConfig(BotConfig):
         self.fish_color_hsv = self._load_as_array(preset["fish_color_hsv"])
 
 
-class Fisch(Bot):
+class FischBot(Bot):
     def __init__(self, config: FischConfig):
         super().__init__()
 
@@ -211,12 +238,12 @@ class Fisch(Bot):
             fish_position,
         )
 
-    def run(self):
+    def mainloop(self):
         print("Fisch bot is active")
 
         pydirectinput.PAUSE = 0
 
-        while self.is_running:
+        while not self._stop_event.is_set():
             self.update_active_timer()
 
             if not util.is_window_focused():
@@ -376,13 +403,16 @@ class Fisch(Bot):
 
 
 class DigItConfig(BotConfig):
-    def __init__(self):
+    def __init__(self, path: str | None):
         super().__init__()
 
         self.prompt_rect = np.array((0, 0, 0, 0))
         self.reel_rect = np.array((0, 0, 0, 0))
         self.edge_rect = np.array((0, 0, 0, 0))
         self.sample_coord = np.array((0, 0, 0, 0))
+
+        if path is not None:
+            self.load(path)
 
     def load(self, path):
         preset = super()._load(path)
@@ -397,7 +427,7 @@ class DigItConfig(BotConfig):
         self.sample_coord = self._load_as_array(preset["sample_coord"])
 
 
-class DigIt(Bot):
+class DigItBot(Bot):
     def __init__(self, config: DigItConfig):
         super().__init__()
         self.config = config
@@ -511,12 +541,12 @@ class DigIt(Bot):
 
         return current_pos, target_pos, target_width
 
-    def run(self):
+    def mainloop(self):
         print("Dig bot is active")
 
         pydirectinput.PAUSE = 0
 
-        while self.is_running:
+        while not self._stop_event.is_set():
             self.update_active_timer()
 
             if not util.is_window_focused():
