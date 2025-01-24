@@ -10,6 +10,37 @@ import yaml
 import util, kinematics
 
 
+class BotConfig:
+    def __init__(self):
+        self.monitor_index = 1
+
+    def _load_config_file(self, path):
+        with open(path, "r") as f:
+            config = yaml.safe_load(f)
+
+        return config
+
+    def _load_as_array(self, v):
+        return np.array(v).astype(np.int64)
+
+    def _load_image(self, path):
+        try:
+            return cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        except cv2.error:
+            print(f'Failed to find image at "{ path }"')
+            raise ValueError("Invalid image path")
+
+    def load(self, path):
+        config = self._load_config_file(path)
+
+        use_preset = config["use_preset"]
+        preset = config["presets"][use_preset]
+
+        self.monitor_index = preset["monitor_index"]
+
+        return preset
+
+
 class Bot:
     def __init__(self):
         self.failsafe_active = False
@@ -20,47 +51,63 @@ class Bot:
 
         self.is_running = True
 
+    def reset_active_timer(self):
+        self.last_active_time = time.time()
+
+        if self.failsafe_active:
+            print(f"AFK fail safe deactivated after successful action")
+            print(f"Current time { datetime.datetime.now() }")
+
+        self.failsafe_active = False
+
+    def update_active_timer(self):
+        elapsed = time.time() - self.last_active_time
+
+        if elapsed > 60 and not self.failsafe_active:
+            print("No activity detected in 1 minute")
+            print(f"AFK fail safe activated at { datetime.datetime.now() }")
+
+            self.failsafe_active = True
+        elif elapsed > 60 * 10:
+            print("Last successful activity was over 10 minutes ago, stopping the bot")
+            print(f"Current time { datetime.datetime.now() }")
+
+            self.is_running = False
+
+    def toggle_auto_start(self):
+        self.auto_start = not self.auto_start
+
+    def toggle_auto_control(self):
+        self.auto_control = not self.auto_control
+
     def stop(self):
         self.is_running = False
 
 
-class FischConfig:
+class FischConfig(BotConfig):
     def __init__(self):
+        super().__init__()
+
+        self.prompt_template = None
         self.prompt_rect = np.array((0, 0, 0, 0))
+
         self.reel_rect = np.array((0, 0, 0, 0))
 
-        self.monitor_index = 1
-        self.prompt_template = None
-
     def load(self, path):
-        with open(path, "r") as f:
-            config = yaml.safe_load(f)
+        preset = super().load(path)
 
-        use_preset = config["use_preset"]
-        preset = config["presets"][use_preset]
+        image = self._load_image(preset["prompt_image"])
+        self.prompt_template = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        try:
-            reel_prompt_image_path = preset["prompt_image"]
-            self.prompt_template = cv2.imread(
-                reel_prompt_image_path, cv2.IMREAD_UNCHANGED
-            )
-            self.prompt_template = cv2.cvtColor(
-                self.prompt_template, cv2.COLOR_BGR2GRAY
-            )
-        except cv2.error:
-            print(f'Failed to find image "{ reel_prompt_image_path }"')
-            exit()
+        button_base = cv2.imread(preset["button_base_image"], cv2.IMREAD_UNCHANGED)
+        button_text = cv2.imread(preset["button_text_image"], cv2.IMREAD_UNCHANGED)
+        button = np.array(util.paste(button_base, button_text, background_alpha=0.6))
+        self.button_template = cv2.cvtColor(button, cv2.COLOR_BGR2GRAY)
 
-        def load_as_array(k):
-            return np.array(preset[k]).astype(np.int64)
-
-        self.monitor_index = preset["monitor_index"]
-        self.button_base_path = preset["button_base_image"]
-        self.button_text_path = preset["button_text_image"]
-        self.prompt_rect = load_as_array("prompt_rect")
-        self.reel_rect = load_as_array("reel_rect")
-        self.button_scales = load_as_array("button_scales")
-        self.fish_color_hsv = load_as_array("fish_color_hsv")
+        self.prompt_rect = self._load_as_array(preset["prompt_rect"])
+        self.reel_rect = self._load_as_array(preset["reel_rect"])
+        self.button_scales = self._load_as_array(preset["button_scales"])
+        self.fish_color_hsv = self._load_as_array(preset["fish_color_hsv"])
 
 
 class Fisch(Bot):
@@ -68,12 +115,6 @@ class Fisch(Bot):
         super().__init__()
 
         self.config = config
-
-        button_background = cv2.imread(config.button_base_path, cv2.IMREAD_UNCHANGED)
-        button_text = cv2.imread(config.button_text_path, cv2.IMREAD_UNCHANGED)
-        template = util.paste(button_background, button_text, background_alpha=0.6)
-
-        self.button_template = cv2.cvtColor(np.array(template), cv2.COLOR_BGR2GRAY)
 
     def process_sobel(self, image):
         image = cv2.GaussianBlur(image, (3, 3), 0)
@@ -93,7 +134,7 @@ class Fisch(Bot):
         a = self.process_sobel(image)
 
         for scale in self.config.button_scales:
-            b = cv2.resize(self.button_template, (scale, scale))
+            b = cv2.resize(self.config.button_template, (scale, scale))
             b = self.process_sobel(b)
 
             matched = cv2.matchTemplate(a, b, cv2.TM_CCOEFF_NORMED, None, None)
@@ -105,7 +146,7 @@ class Fisch(Bot):
 
                 return (top_left + bottom_right) // 2
 
-        return np.array((-1, 1))
+        return None
 
     def is_control_minigame_active(self):
         image = util.grab_image(
@@ -177,20 +218,7 @@ class Fisch(Bot):
         pydirectinput.PAUSE = 0
 
         while self.is_running:
-            # AFK fail safe
-
-            last_active_elapsed = time.time() - self.last_active_time
-
-            if last_active_elapsed > 60 and not self.failsafe_active:
-                print("No shaking nor reeling detected in 1 minute")
-                print(f"AFK fail safe activated at { datetime.datetime.now() }")
-                self.failsafe_active = True
-            elif last_active_elapsed > 60 * 10:
-                print(
-                    "Last successful shake or reel was over 10 minutes ago, breaking loop"
-                )
-                print(f"Current time { datetime.datetime.now() }")
-                break
+            self.update_active_timer()
 
             if not util.is_window_focused():
                 time.sleep(1.5)
@@ -227,7 +255,7 @@ class Fisch(Bot):
                 image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
                 pos = self.get_shake_button_pos(image)
 
-                if pos[0] >= 0 and pos[1] >= 0:
+                if pos is not None:
                     was_shaking = True
 
                     pos += (int(x0 + self.button_template.shape[1] / 6), y0)
@@ -253,7 +281,8 @@ class Fisch(Bot):
 
             was_reeling = False
             last_reel_check_time = 0
-            dt = 1 / 60
+
+            max_frequency = 60
 
             estimator = kinematics.ReelStateEstimator()
             controller_gains = {
@@ -266,10 +295,12 @@ class Fisch(Bot):
 
             is_holding = False
 
-            while self.auto_control:
-                now = time.time()
+            last_time = time.perf_counter()
 
-                if now - last_reel_check_time > 0.1 or not util.is_window_focused():
+            while self.auto_control and util.is_window_focused():
+                now = time.perf_counter()
+
+                if now - last_reel_check_time > 0.1:
                     if not self.is_control_minigame_active():
                         break
 
@@ -277,6 +308,10 @@ class Fisch(Bot):
                     last_reel_check_time = now
 
                 position, width, target = self.get_state()
+
+                true_dt = now - last_time
+                dt = max(true_dt, 1 / max_frequency)
+                last_time = now
 
                 # Clip
 
@@ -329,7 +364,7 @@ class Fisch(Bot):
                     pydirectinput.mouseUp(button="left")
                     is_holding = False
 
-                time.sleep(dt)
+                time.sleep(np.clip((1 / max_frequency) - true_dt))
 
             if was_reeling:
                 pydirectinput.mouseUp(button="left")
@@ -337,31 +372,20 @@ class Fisch(Bot):
             if not (was_shaking or was_reeling):
                 time.sleep(1)
             else:
-                if self.failsafe_active:
-                    if was_shaking and was_reeling:
-                        s = "shake and reel"
-                    elif was_shaking:
-                        s = "shake"
-                    else:
-                        s = "reel"
-
-                    print(f"AFK fail safe deactivated after successful { s }")
-                    print(f"Current time { datetime.datetime.now() }")
-
-                self.failsafe_active = False
-                self.last_active_time = time.time()
+                self.reset_active_timer()
 
         print("Fisch bot is inactive")
 
 
 class DigItConfig:
     def __init__(self):
+        super().__init__()
+
         self.prompt_rect = np.array((0, 0, 0, 0))
         self.reel_rect = np.array((0, 0, 0, 0))
         self.edge_rect = np.array((0, 0, 0, 0))
         self.sample_coord = np.array((0, 0, 0, 0))
 
-        self.monitor_index = 1
         self.prompt_template = None
 
     def load(self, path):
@@ -513,18 +537,7 @@ class DigIt(Bot):
         pydirectinput.PAUSE = 0
 
         while self.is_running:
-            # AFK fail safe
-
-            last_active_elapsed = time.time() - self.last_active_time
-
-            if last_active_elapsed > 60 and not self.failsafe_active:
-                print("No action detected in 1 minute")
-                print(f"AFK fail safe activated at { datetime.datetime.now() }")
-                self.failsafe_active = True
-            elif last_active_elapsed > 60 * 10:
-                print("Last successful action was over 10 minutes ago, breaking loop")
-                print(f"Current time { datetime.datetime.now() }")
-                break
+            self.update_active_timer()
 
             if not util.is_window_focused():
                 time.sleep(1.5)
@@ -573,7 +586,7 @@ class DigIt(Bot):
 
             last_time = time.perf_counter()
 
-            while self.auto_control:
+            while self.auto_control and util.is_window_focused():
                 now = time.perf_counter()
 
                 if now - last_dig_check_time > 0.25 or not util.is_window_focused():
@@ -584,7 +597,7 @@ class DigIt(Bot):
                     last_dig_check_time = now
 
                 true_dt = now - last_time
-                dt = max(true_dt, 1 / 60)
+                dt = max(true_dt, 1 / max_frequency)
                 last_time = now
 
                 current_pos, target_pos, target_width = self.get_state()
@@ -648,15 +661,7 @@ class DigIt(Bot):
             if was_digging:
                 pydirectinput.mouseUp(button="left")
 
-                if self.failsafe_active:
-                    if was_digging:
-                        s = "dig"
-
-                    print(f"AFK fail safe deactivated after successful { s }")
-                    print(f"Current time { datetime.datetime.now() }")
-
-                self.failsafe_active = False
-                self.last_active_time = time.time()
+                self.reset_active_timer()
 
                 time.sleep(2.5)
 

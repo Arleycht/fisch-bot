@@ -26,6 +26,10 @@ auto_start_status_label = tk.Label(ui_root, text="OFF", fg="white", bg="black")
 auto_control_label = tk.Label(ui_root, text="Auto-control", fg="white", bg="black")
 auto_control_status_label = tk.Label(ui_root, text="OFF", fg="white", bg="black")
 
+debug_button = tk.Button(ui_root, text="Save Debug Pictures", fg="white", bg="black")
+
+current_config: bots.BotConfig
+current_bot: bots.Bot
 
 
 def update_labels():
@@ -44,13 +48,13 @@ def update_labels():
 
 def toggle_auto_start():
     global bot
-    bot.auto_start = not bot.auto_start
+    bot.toggle_auto_start()
     update_labels()
 
 
 def toggle_auto_control():
     global bot
-    bot.auto_control = not bot.auto_control
+    bot.toggle_auto_control()
     update_labels()
 
 
@@ -60,6 +64,30 @@ def stop_bot():
     bot.stop()
 
 
+def save_debug_pictures():
+    from pathlib import Path
+    from PIL import Image
+
+    image_path = Path("debug_images/")
+    image_path.mkdir(exist_ok=True)
+
+    with mss.mss() as sct:
+        print("Current monitor index:", config.monitor_index)
+        print("Monitors by index:")
+
+        for i, monitor in enumerate(sct.monitors):
+            if i == 0:
+                print(f"(ALL) { i }: { monitor["width"] }x{ monitor["height"] }")
+            else:
+                print(f"{ i }: { monitor["width"] }x{ monitor["height"] }")
+
+            monitor = sct.monitors[config.monitor_index]
+            monitor_image = np.array(sct.grab(monitor))
+
+            monitor_image = cv2.cvtColor(monitor_image, cv2.COLOR_BGR2RGB)
+            Image.fromarray(monitor_image).save(image_path / f"monitor_{ i }.png")
+
+
 def main():
     image_label.pack()
     mode_label.pack()
@@ -67,8 +95,12 @@ def main():
     auto_start_status_label.pack()
     auto_control_label.pack()
     auto_control_status_label.pack()
+    debug_button.pack(pady=20)
+
+    debug_button.configure(command=save_debug_pictures)
 
     global bot
+    global config
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -77,56 +109,18 @@ def main():
         choices=["fisch", "dig-it"],
         help="Which mode to run the bot in.",
     )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Prints detected monitors and saves screenshots of each monitor to check if the correct monitor is selected.",
-    )
 
     args = parser.parse_args()
 
-    if args.debug:
-        from pathlib import Path
-        from PIL import Image
-
-        image_path = Path("debug_images/")
-        image_path.mkdir(exist_ok=True)
-
-        with mss.mss() as sct:
-            print("Current monitor index:", config.monitor_index)
-            print("Monitors by index:")
-
-            for i, monitor in enumerate(sct.monitors):
-                if i == 0:
-                    print(f"(ALL) { i }: { monitor["width"] }x{ monitor["height"] }")
-                else:
-                    print(f"{ i }: { monitor["width"] }x{ monitor["height"] }")
-
-                monitor = sct.monitors[config.monitor_index]
-                monitor_image = np.array(sct.grab(monitor))
-
-                monitor_image = cv2.cvtColor(monitor_image, cv2.COLOR_BGR2RGB)
-                Image.fromarray(monitor_image).save(image_path / f"monitor_{ i }.png")
-
-        exit()
-
     if args.mode == "fisch":
-        try:
-            config = bots.FischConfig()
-            config.load("configs/fisch.yaml")
-        except Exception as e:
-            print(f"Failed to load config: { e }")
-            exit()
+        config = bots.FischConfig()
+        config.load("configs/fisch.yaml")
 
         bot = bots.Fisch(config)
         mode_label.configure(text="Fisch Mode")
     elif args.mode == "dig-it":
-        try:
-            config = bots.DigItConfig()
-            config.load("configs/dig_it.yaml")
-        except Exception as e:
-            print(f"Failed to load config: { e }")
-            exit()
+        config = bots.DigItConfig()
+        config.load("configs/dig_it.yaml")
 
         bot = bots.DigIt(config)
         mode_label.configure(text="Dig It Mode")
