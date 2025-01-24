@@ -16,12 +16,13 @@ modes: Dict[str, bots.Bot] = {
 }
 
 ui_root = tk.Tk()
-ui_root.iconbitmap("main.ico")
 ui_root.config(bg="black")
 
 default_image = tk.PhotoImage(file="base_icon.png")
 failsafe_image = tk.PhotoImage(file="sleeping_icon.png")
 image_label = tk.Label(ui_root, image=default_image, bg="black")
+
+ui_root.iconphoto(True, default_image)
 
 mode_label = tk.Label(ui_root, fg="#FFBB44", bg="black", font=(None, 16))
 mode_variable = tk.StringVar(ui_root, next(iter(modes)))
