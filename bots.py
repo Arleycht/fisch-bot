@@ -257,7 +257,7 @@ class Fisch(Bot):
                 if pos is not None:
                     was_shaking = True
 
-                    pos += (int(x0 + self.button_template.shape[1] / 6), y0)
+                    pos += (int(x0 + self.config.button_template.shape[1] / 6), y0)
 
                     pydirectinput.moveTo(pos[0], pos[1] + 10)
                     time.sleep(0.02)
@@ -290,11 +290,10 @@ class Fisch(Bot):
             }
             controller = kinematics.Controller()
 
-            start_time = time.time()
-
             is_holding = False
 
             last_time = time.perf_counter()
+            start_time = last_time
 
             while self.auto_control and util.is_window_focused():
                 now = time.perf_counter()
@@ -326,7 +325,7 @@ class Fisch(Bot):
                 alpha = (now - start_time) / 3
 
                 if alpha < 1:
-                    target += (1 - alpha) * 0.025
+                    target += np.clip(1 - alpha, 0, 1) * 0.025
 
                 error = target - position
 
@@ -363,7 +362,7 @@ class Fisch(Bot):
                     pydirectinput.mouseUp(button="left")
                     is_holding = False
 
-                time.sleep(np.clip((1 / max_frequency) - true_dt))
+                time.sleep(max((1 / max_frequency) - true_dt, 0))
 
             if was_reeling:
                 pydirectinput.mouseUp(button="left")
