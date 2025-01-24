@@ -30,7 +30,7 @@ class BotConfig:
             print(f'Failed to find image at "{ path }"')
             raise ValueError("Invalid image path")
 
-    def load(self, path):
+    def _load(self, path):
         config = self._load_config_file(path)
 
         use_preset = config["use_preset"]
@@ -88,16 +88,15 @@ class FischConfig(BotConfig):
     def __init__(self):
         super().__init__()
 
-        self.prompt_template = None
         self.prompt_rect = np.array((0, 0, 0, 0))
-
         self.reel_rect = np.array((0, 0, 0, 0))
 
     def load(self, path):
-        preset = super().load(path)
+        preset = super()._load(path)
 
-        image = self._load_image(preset["prompt_image"])
-        self.prompt_template = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        self.prompt_template = cv2.cvtColor(
+            self._load_image(preset["prompt_image"]), cv2.COLOR_BGR2GRAY
+        )
 
         button_base = cv2.imread(preset["button_base_image"], cv2.IMREAD_UNCHANGED)
         button_text = cv2.imread(preset["button_text_image"], cv2.IMREAD_UNCHANGED)
@@ -377,7 +376,7 @@ class Fisch(Bot):
         print("Fisch bot is inactive")
 
 
-class DigItConfig:
+class DigItConfig(BotConfig):
     def __init__(self):
         super().__init__()
 
@@ -386,35 +385,17 @@ class DigItConfig:
         self.edge_rect = np.array((0, 0, 0, 0))
         self.sample_coord = np.array((0, 0, 0, 0))
 
-        self.prompt_template = None
-
     def load(self, path):
-        with open(path, "r") as f:
-            config = yaml.safe_load(f)
+        preset = super()._load(path)
 
-        use_preset = config["use_preset"]
-        preset = config["presets"][use_preset]
+        self.prompt_template = cv2.cvtColor(
+            self._load_image(preset["prompt_image"]), cv2.COLOR_BGR2GRAY
+        )
 
-        try:
-            reel_prompt_image_path = preset["prompt_image"]
-            self.prompt_template = cv2.imread(
-                reel_prompt_image_path, cv2.IMREAD_UNCHANGED
-            )
-            self.prompt_template = cv2.cvtColor(
-                self.prompt_template, cv2.COLOR_BGR2GRAY
-            )
-        except cv2.error:
-            print(f'Failed to find image "{ reel_prompt_image_path }"')
-            exit()
-
-        def load_as_array(k):
-            return np.array(preset[k]).astype(np.int64)
-
-        self.monitor_index = preset["monitor_index"]
-        self.prompt_rect = load_as_array("prompt_rect")
-        self.reel_rect = load_as_array("reel_rect")
-        self.edge_rect = load_as_array("edge_rect")
-        self.sample_coord = load_as_array("sample_coord")
+        self.prompt_rect = self._load_as_array(preset["prompt_rect"])
+        self.reel_rect = self._load_as_array(preset["reel_rect"])
+        self.edge_rect = self._load_as_array(preset["edge_rect"])
+        self.sample_coord = self._load_as_array(preset["sample_coord"])
 
 
 class DigIt(Bot):
