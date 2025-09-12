@@ -2,11 +2,11 @@ use_preset: 1920x1080
 
 presets:
   1920x1080:
-    monitor_index: 1
+    monitor_index: 2
     prompt_image: templates/fisch_prompt.png
     button_base_image: templates/base_button.png
     button_text_image: templates/base_text.png
-    prompt_rect: [870, 790, 176, 16]
+    prompt_rect: [850, 750, 200, 70]
     reel_rect: [572, 876, 776, 31]
     button_scales: [
       121,
